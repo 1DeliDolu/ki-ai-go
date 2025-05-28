@@ -8,7 +8,6 @@ import (
 
 	"github.com/1DeliDolu/ki-ai-go/internal/services"
 	"github.com/1DeliDolu/ki-ai-go/pkg/types"
-
 	"github.com/gin-gonic/gin"
 )
 

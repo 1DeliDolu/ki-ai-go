@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/1DeliDolu/ki-ai-go/internal/config"
-	"github.com/1DeliDolu/ki-ai-go/internal/handlers"
+	"github.com/1DeliDolu/ki-ai-go/internal/processors"
 	"github.com/1DeliDolu/ki-ai-go/internal/storage"
 	"github.com/1DeliDolu/ki-ai-go/pkg/types"
 )
@@ -19,7 +19,7 @@ import (
 type DocumentService struct {
 	memDB           *storage.MemoryDB
 	config          *config.Config
-	documentManager *handlers.DocumentManager
+	documentManager *processors.DocumentManager
 }
 
 func NewDocumentService(db interface{}, cfg *config.Config) *DocumentService {
@@ -38,7 +38,7 @@ func NewDocumentService(db interface{}, cfg *config.Config) *DocumentService {
 	return &DocumentService{
 		memDB:           memDB,
 		config:          cfg,
-		documentManager: handlers.NewDocumentManager(),
+		documentManager: processors.NewDocumentManager(),
 	}
 }
 
@@ -108,23 +108,6 @@ func (s *DocumentService) UploadDocument(fileHeader *multipart.FileHeader) (*typ
 	return doc, nil
 }
 
-func (s *DocumentService) extractTextContent(filePath, originalName string) (string, error) {
-	// Use the new document manager for content extraction
-	content, err := s.documentManager.ProcessDocument(filePath)
-	if err != nil {
-		// Fallback to old method if new processor fails
-		ext := filepath.Ext(originalName)
-		switch ext {
-		case ".txt", ".md":
-			fileContent, err := os.ReadFile(filePath)
-			return string(fileContent), err
-		default:
-			return "", fmt.Errorf("unsupported file type: %s", ext)
-		}
-	}
-
-	return content.Text, nil
-}
 
 // GetDocumentContent extracts content from a document
 func (s *DocumentService) GetDocumentContent(documentID string) (*types.DocumentContent, error) {
