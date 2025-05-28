@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,12 +23,25 @@ type DocumentProcessor interface {
 // DocumentManager manages different document processors
 type DocumentManager struct {
 	processors map[string]DocumentProcessor
+	stats      ProcessingStats
+}
+
+// ProcessingStats tracks document processing statistics
+type ProcessingStats struct {
+	TotalProcessed     int
+	SuccessfullyParsed int
+	Failed             int
+	TypeCounts         map[string]int
+	LastProcessed      time.Time
 }
 
 // NewDocumentManager creates a new document manager with all processors
 func NewDocumentManager() *DocumentManager {
 	dm := &DocumentManager{
 		processors: make(map[string]DocumentProcessor),
+		stats: ProcessingStats{
+			TypeCounts: make(map[string]int),
+		},
 	}
 
 	// Register basic processors
@@ -44,6 +58,7 @@ func NewDocumentManager() *DocumentManager {
 	dm.RegisterProcessor(&LogProcessor{})
 	dm.RegisterProcessor(&CodeProcessor{})
 
+	log.Printf("📄 DocumentManager initialized with %d processors", len(dm.processors))
 	return dm
 }
 
@@ -55,8 +70,10 @@ func (dm *DocumentManager) RegisterProcessor(processor DocumentProcessor) {
 	}
 }
 
-// ProcessDocument processes a document based on its file extension
+// ProcessDocument processes a document based on its file extension with enhanced features
 func (dm *DocumentManager) ProcessDocument(path string) (*types.DocumentContent, error) {
+	log.Printf("🔄 Processing document: %s", filepath.Base(path))
+
 	ext := strings.ToLower(filepath.Ext(path))
 	if strings.HasPrefix(ext, ".") {
 		ext = ext[1:] // Remove the dot
@@ -64,10 +81,127 @@ func (dm *DocumentManager) ProcessDocument(path string) (*types.DocumentContent,
 
 	processor, exists := dm.processors[ext]
 	if !exists {
+		dm.stats.Failed++
 		return nil, fmt.Errorf("unsupported file type: %s", ext)
 	}
 
-	return processor.Read(path)
+	// Update processing stats
+	dm.stats.TotalProcessed++
+	dm.stats.LastProcessed = time.Now()
+
+	content, err := processor.Read(path)
+	if err != nil {
+		dm.stats.Failed++
+		return nil, fmt.Errorf("failed to process %s: %w", filepath.Base(path), err)
+	}
+
+	// Update success stats
+	dm.stats.SuccessfullyParsed++
+	dm.stats.TypeCounts[ext]++
+
+	log.Printf("✅ Successfully processed %s (%s)", filepath.Base(path), ext)
+	return content, nil
+}
+
+// ProcessMultipleDocuments processes multiple documents and returns results
+func (dm *DocumentManager) ProcessMultipleDocuments(paths []string) map[string]*types.DocumentContent {
+	results := make(map[string]*types.DocumentContent)
+
+	log.Printf("📦 Processing %d documents...", len(paths))
+
+	for _, path := range paths {
+		content, err := dm.ProcessDocument(path)
+		if err != nil {
+			log.Printf("❌ Error processing %s: %v", filepath.Base(path), err)
+			continue
+		}
+		results[path] = content
+	}
+
+	log.Printf("✅ Successfully processed %d out of %d documents", len(results), len(paths))
+	return results
+}
+
+// GetProcessingStats returns current processing statistics
+func (dm *DocumentManager) GetProcessingStats() ProcessingStats {
+	return dm.stats
+}
+
+// ResetStats resets processing statistics
+func (dm *DocumentManager) ResetStats() {
+	dm.stats = ProcessingStats{
+		TypeCounts: make(map[string]int),
+	}
+	log.Println("📊 Processing stats reset")
+}
+
+// GetProcessorInfo returns information about a specific processor
+func (dm *DocumentManager) GetProcessorInfo(fileType string) map[string]interface{} {
+	processor, exists := dm.processors[fileType]
+	if !exists {
+		return map[string]interface{}{
+			"supported": false,
+			"error":     fmt.Sprintf("No processor available for type: %s", fileType),
+		}
+	}
+
+	return map[string]interface{}{
+		"supported":       true,
+		"processor_type":  fmt.Sprintf("%T", processor),
+		"supported_types": processor.GetSupportedTypes(),
+		"processed_count": dm.stats.TypeCounts[fileType],
+	}
+}
+
+// ValidateFile checks if a file can be processed
+func (dm *DocumentManager) ValidateFile(path string) error {
+	// Check if file exists
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return fmt.Errorf("file does not exist: %s", path)
+	}
+
+	// Check file extension
+	ext := strings.ToLower(filepath.Ext(path))
+	if strings.HasPrefix(ext, ".") {
+		ext = ext[1:]
+	}
+
+	if _, exists := dm.processors[ext]; !exists {
+		return fmt.Errorf("unsupported file type: %s", ext)
+	}
+
+	// Check file size (optional limit)
+	stat, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("cannot read file info: %w", err)
+	}
+
+	// Set a reasonable file size limit (100MB)
+	const maxFileSize = 100 * 1024 * 1024
+	if stat.Size() > maxFileSize {
+		return fmt.Errorf("file too large: %d bytes (max: %d bytes)", stat.Size(), maxFileSize)
+	}
+
+	return nil
+}
+
+// TruncateString helper function for content preview
+func TruncateString(s string, length int) string {
+	if len(s) <= length {
+		return s
+	}
+	return s[:length] + "..."
+}
+
+// GetSupportedExtensions returns all supported file extensions with their processors
+func (dm *DocumentManager) GetSupportedExtensions() map[string]string {
+	extensions := make(map[string]string)
+
+	for ext, processor := range dm.processors {
+		extensions[ext] = fmt.Sprintf("%T", processor)
+	}
+
+	return extensions
 }
 
 // GetSupportedTypes returns all supported file extensions

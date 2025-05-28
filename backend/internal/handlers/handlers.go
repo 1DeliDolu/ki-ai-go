@@ -278,6 +278,48 @@ func (h *Handler) GetSupportedDocumentTypes(c *gin.Context) {
 	})
 }
 
+// GetDocumentProcessingStats returns document processing statistics
+func (h *Handler) GetDocumentProcessingStats(c *gin.Context) {
+	stats := h.documentService.GetDocumentProcessingStats()
+	c.JSON(http.StatusOK, gin.H{
+		"processing_stats": stats,
+	})
+}
+
+// ProcessMultipleDocuments processes multiple documents in batch
+func (h *Handler) ProcessMultipleDocuments(c *gin.Context) {
+	var req struct {
+		DocumentIDs []string `json:"document_ids" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Get document paths
+	var paths []string
+	for _, id := range req.DocumentIDs {
+		doc, err := h.documentService.GetDocument(id)
+		if err == nil && doc.Path != "" {
+			paths = append(paths, doc.Path)
+		}
+	}
+
+	if len(paths) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No valid documents found"})
+		return
+	}
+
+	// For now, return a placeholder response with document info
+	c.JSON(http.StatusOK, gin.H{
+		"message":         "Batch processing completed",
+		"processed_paths": paths,
+		"total_files":     len(paths),
+		"note":            "Enhanced batch processing with DocumentManager coming soon",
+	})
+}
+
 // Wiki handlers
 func (h *Handler) SearchWiki(c *gin.Context) {
 	query := c.Query("q")

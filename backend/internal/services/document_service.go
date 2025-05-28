@@ -60,7 +60,72 @@ func (s *DocumentService) ListDocuments() ([]types.Document, error) {
 	return result, nil
 }
 
+// GetDocumentContent extracts content from a document with enhanced error handling
+func (s *DocumentService) GetDocumentContent(documentID string) (*types.DocumentContent, error) {
+	doc, err := s.memDB.GetDocument(documentID)
+	if err != nil {
+		return nil, fmt.Errorf("document not found: %w", err)
+	}
+
+	if doc.Path == "" {
+		return nil, fmt.Errorf("document path not available")
+	}
+
+	// Validate file before processing
+	if err := s.documentManager.ValidateFile(doc.Path); err != nil {
+		return nil, fmt.Errorf("file validation failed: %w", err)
+	}
+
+	content, err := s.documentManager.ProcessDocument(doc.Path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to process document: %w", err)
+	}
+
+	return content, nil
+}
+
+// GetDocumentProcessingStats returns processing statistics
+func (s *DocumentService) GetDocumentProcessingStats() interface{} {
+	return s.documentManager.GetProcessingStats()
+}
+
+// ValidateUploadedFile validates a file before upload
+func (s *DocumentService) ValidateUploadedFile(fileHeader *multipart.FileHeader) error {
+	// Check file extension
+	ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
+	if strings.HasPrefix(ext, ".") {
+		ext = ext[1:]
+	}
+
+	supportedTypes := s.documentManager.GetSupportedTypes()
+	isSupported := false
+	for _, supportedType := range supportedTypes {
+		if ext == supportedType {
+			isSupported = true
+			break
+		}
+	}
+
+	if !isSupported {
+		return fmt.Errorf("unsupported file type: %s. Supported types: %v", ext, supportedTypes)
+	}
+
+	// Check file size (50MB limit for uploads)
+	const maxUploadSize = 50 * 1024 * 1024
+	if fileHeader.Size > maxUploadSize {
+		return fmt.Errorf("file too large: %d bytes (max: %d bytes)", fileHeader.Size, maxUploadSize)
+	}
+
+	return nil
+}
+
+// UploadDocument with enhanced validation
 func (s *DocumentService) UploadDocument(fileHeader *multipart.FileHeader) (*types.Document, error) {
+	// Validate file before upload
+	if err := s.ValidateUploadedFile(fileHeader); err != nil {
+		return nil, err
+	}
+
 	// Create uploads directory if it doesn't exist
 	if err := os.MkdirAll(s.config.UploadsPath, 0755); err != nil {
 		return nil, err
@@ -106,31 +171,6 @@ func (s *DocumentService) UploadDocument(fileHeader *multipart.FileHeader) (*typ
 
 	log.Printf("Document uploaded successfully: %s", doc.Name)
 	return doc, nil
-}
-
-
-// GetDocumentContent extracts content from a document
-func (s *DocumentService) GetDocumentContent(documentID string) (*types.DocumentContent, error) {
-	doc, err := s.memDB.GetDocument(documentID)
-	if err != nil {
-		return nil, fmt.Errorf("document not found: %w", err)
-	}
-
-	if doc.Path == "" {
-		return nil, fmt.Errorf("document path not available")
-	}
-
-	content, err := s.documentManager.ProcessDocument(doc.Path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to process document: %w", err)
-	}
-
-	return content, nil
-}
-
-// GetSupportedDocumentTypes returns all supported document types
-func (s *DocumentService) GetSupportedDocumentTypes() []string {
-	return s.documentManager.GetSupportedTypes()
 }
 
 func (s *DocumentService) SearchDocuments(query string) ([]types.Document, error) {
@@ -207,4 +247,14 @@ func (s *DocumentService) DeleteDocument(idStr string) error {
 
 	log.Printf("Successfully deleted document: %s", doc.Name)
 	return nil
+}
+
+// GetSupportedDocumentTypes returns all supported document types
+func (s *DocumentService) GetSupportedDocumentTypes() []string {
+	return s.documentManager.GetSupportedTypes()
+}
+
+// GetDocument returns a document by ID
+func (s *DocumentService) GetDocument(documentID string) (*types.Document, error) {
+	return s.memDB.GetDocument(documentID)
 }
