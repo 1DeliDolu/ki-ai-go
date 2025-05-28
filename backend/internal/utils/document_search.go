@@ -6,33 +6,68 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/1DeliDolu/ki-ai-go/internal/processors"
 )
 
-type SearchResult struct {
-	FilePath    string   `json:"file_path"`
-	FileName    string   `json:"file_name"`
-	Matches     []string `json:"matches"`
-	LineNumbers []int    `json:"line_numbers"`
-	MatchCount  int      `json:"match_count"`
-}
-
+// SearchOptions defines search parameters
 type SearchOptions struct {
 	CaseSensitive bool `json:"case_sensitive"`
 	WholeWords    bool `json:"whole_words"`
-	UseRegex      bool `json:"use_regex"`
+	UseRegex      bool `json:"use_regex"` // Added missing field
 	MaxMatches    int  `json:"max_matches"`
+	ContextLines  int  `json:"context_lines"`
 }
 
+// SearchResult represents search results for a document
+type SearchResult struct {
+	FilePath     string    `json:"file_path"`
+	FileName     string    `json:"file_name"`
+	Matches      []Match   `json:"matches"`
+	TotalMatches int       `json:"total_matches"`
+	ProcessedAt  time.Time `json:"processed_at"`
+}
+
+// Match represents a single search match
+type Match struct {
+	LineNumber int    `json:"line_number"`
+	Content    string `json:"content"`
+	Context    string `json:"context"`
+}
+
+// DocumentSearcher provides document search functionality
 type DocumentSearcher struct {
 	manager *processors.DocumentManager
 }
 
+// NewDocumentSearcher creates a new document searcher
 func NewDocumentSearcher() *DocumentSearcher {
 	return &DocumentSearcher{
 		manager: processors.NewDocumentManager(),
 	}
+}
+
+// SearchInMultipleDocuments searches for a query in multiple documents
+func (ds *DocumentSearcher) SearchInMultipleDocuments(paths []string, query string, options SearchOptions) (map[string]*SearchResult, error) {
+	log.Printf("🔍 Searching in %d documents for: %s", len(paths), query)
+
+	results := make(map[string]*SearchResult)
+
+	for _, path := range paths {
+		result, err := ds.SearchInDocument(path, query, options)
+		if err != nil {
+			log.Printf("❌ Error searching %s: %v", path, err)
+			continue
+		}
+
+		if result.TotalMatches > 0 {
+			results[path] = result
+		}
+	}
+
+	log.Printf("✅ Search completed. Found matches in %d out of %d documents", len(results), len(paths))
+	return results, nil
 }
 
 // SearchInDocument searches for a query within a single document
@@ -46,40 +81,18 @@ func (ds *DocumentSearcher) SearchInDocument(path, query string, options SearchO
 	}
 
 	// Perform search
-	matches, lineNumbers := ds.searchInText(content.Text, query, options)
+	matches := ds.searchInText(content.Text, query, options)
 
 	result := &SearchResult{
-		FilePath:    path,
-		FileName:    filepath.Base(path),
-		Matches:     matches,
-		LineNumbers: lineNumbers,
-		MatchCount:  len(matches),
+		FilePath:     path,
+		FileName:     filepath.Base(path),
+		Matches:      matches,
+		TotalMatches: len(matches),
+		ProcessedAt:  time.Now(),
 	}
 
 	log.Printf("✅ Found %d matches in %s", len(matches), filepath.Base(path))
 	return result, nil
-}
-
-// SearchInMultipleDocuments searches for a query in multiple documents
-func (ds *DocumentSearcher) SearchInMultipleDocuments(paths []string, query string, options SearchOptions) (map[string]*SearchResult, error) {
-	log.Printf("🔍 Searching in %d documents for query: %s", len(paths), query)
-
-	results := make(map[string]*SearchResult)
-
-	for _, path := range paths {
-		result, err := ds.SearchInDocument(path, query, options)
-		if err != nil {
-			log.Printf("❌ Error searching %s: %v", filepath.Base(path), err)
-			continue
-		}
-
-		if result.MatchCount > 0 {
-			results[path] = result
-		}
-	}
-
-	log.Printf("✅ Search completed. Found matches in %d out of %d documents", len(results), len(paths))
-	return results, nil
 }
 
 // SearchByFileType searches in documents of specific types
@@ -106,13 +119,17 @@ func (ds *DocumentSearcher) SearchWithMetadata(paths []string, query string, opt
 		}
 
 		// Search in content
-		contentMatches, contentLineNumbers := ds.searchInText(content.Text, query, options)
+		contentMatches := ds.searchInText(content.Text, query, options)
 
-		// Search in metadata
-		var metadataMatches []string
+		// Search in metadata - create Match objects properly
+		var metadataMatches []Match
 		for key, value := range content.Metadata {
 			if ds.matchesQuery(key+": "+value, query, options) {
-				metadataMatches = append(metadataMatches, fmt.Sprintf("[META] %s: %s", key, value))
+				metadataMatches = append(metadataMatches, Match{
+					LineNumber: 0, // Metadata doesn't have line numbers
+					Content:    fmt.Sprintf("[META] %s: %s", key, value),
+					Context:    fmt.Sprintf("Metadata field: %s", key),
+				})
 			}
 		}
 
@@ -120,11 +137,11 @@ func (ds *DocumentSearcher) SearchWithMetadata(paths []string, query string, opt
 		allMatches := append(contentMatches, metadataMatches...)
 		if len(allMatches) > 0 {
 			results[path] = &SearchResult{
-				FilePath:    path,
-				FileName:    filepath.Base(path),
-				Matches:     allMatches,
-				LineNumbers: contentLineNumbers,
-				MatchCount:  len(allMatches),
+				FilePath:     path,
+				FileName:     filepath.Base(path),
+				Matches:      allMatches,
+				TotalMatches: len(allMatches),
+				ProcessedAt:  time.Now(),
 			}
 		}
 	}
@@ -133,18 +150,20 @@ func (ds *DocumentSearcher) SearchWithMetadata(paths []string, query string, opt
 }
 
 // searchInText performs the actual text search
-func (ds *DocumentSearcher) searchInText(text, query string, options SearchOptions) ([]string, []int) {
-	var matches []string
-	var lineNumbers []int
+func (ds *DocumentSearcher) searchInText(text, query string, options SearchOptions) []Match {
+	var matches []Match
 
 	lines := strings.Split(text, "\n")
 
 	for i, line := range lines {
 		if ds.matchesQuery(line, query, options) {
 			// Extract context around match
-			context := ds.extractContext(lines, i, 2) // 2 lines context
-			matches = append(matches, context)
-			lineNumbers = append(lineNumbers, i+1) // 1-based line numbers
+			context := ds.extractContext(lines, i, options.ContextLines)
+			matches = append(matches, Match{
+				LineNumber: i + 1, // 1-based line numbers
+				Content:    line,
+				Context:    context,
+			})
 
 			// Check max matches limit
 			if options.MaxMatches > 0 && len(matches) >= options.MaxMatches {
@@ -153,7 +172,7 @@ func (ds *DocumentSearcher) searchInText(text, query string, options SearchOptio
 		}
 	}
 
-	return matches, lineNumbers
+	return matches
 }
 
 // matchesQuery checks if a line matches the search query
@@ -223,7 +242,7 @@ func (ds *DocumentSearcher) GetSearchStatistics(results map[string]*SearchResult
 	fileTypes := make(map[string]int)
 
 	for path, result := range results {
-		totalMatches += result.MatchCount
+		totalMatches += result.TotalMatches
 		ext := strings.ToLower(filepath.Ext(path))
 		if ext != "" {
 			ext = ext[1:] // Remove dot

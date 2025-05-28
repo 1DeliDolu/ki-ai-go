@@ -201,15 +201,30 @@ func (h *Handler) GetModelsByType(c *gin.Context) {
 func (h *Handler) ListDocuments(c *gin.Context) {
 	log.Printf("ListDocuments requested from %s", c.ClientIP())
 
-	documents, err := h.documentService.ListDocuments()
+	// Check if only test documents are requested
+	testOnly := c.Query("test_only") == "true"
+
+	var documents []types.Document
+	var err error
+
+	if testOnly {
+		documents, err = h.documentService.GetTestDocuments()
+	} else {
+		documents, err = h.documentService.ListDocuments()
+	}
+
 	if err != nil {
 		log.Printf("Error listing documents: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	log.Printf("Returning %d documents", len(documents))
-	c.JSON(http.StatusOK, gin.H{"documents": documents})
+	log.Printf("Returning %d documents (test_only: %v)", len(documents), testOnly)
+	c.JSON(http.StatusOK, gin.H{
+		"documents": documents,
+		"test_only": testOnly,
+		"count":     len(documents),
+	})
 }
 
 func (h *Handler) UploadDocument(c *gin.Context) {
@@ -551,5 +566,78 @@ func (h *Handler) GetDocumentPreview(c *gin.Context) {
 		"document_id": documentID,
 		"preview":     preview,
 		"max_lines":   maxLines,
+	})
+}
+
+// GetDocumentFileInfo returns comprehensive file information
+func (h *Handler) GetDocumentFileInfo(c *gin.Context) {
+	documentID := c.Param("id")
+	if documentID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Document ID is required"})
+		return
+	}
+
+	fileInfo, err := h.documentService.GetDocumentFileInfo(documentID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"file_info":      fileInfo,
+		"formatted_size": utils.FormatFileSize(fileInfo.Size),
+	})
+}
+
+// GetDocumentAnalysis provides detailed content analysis
+func (h *Handler) GetDocumentAnalysis(c *gin.Context) {
+	documentID := c.Param("id")
+	if documentID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Document ID is required"})
+		return
+	}
+
+	analysis, err := h.documentService.GetDocumentAnalysis(documentID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"analysis": analysis,
+	})
+}
+
+// GetTestDocuments returns only test documents
+func (h *Handler) GetTestDocuments(c *gin.Context) {
+	log.Printf("GetTestDocuments requested from %s", c.ClientIP())
+
+	documents, err := h.documentService.GetTestDocuments()
+	if err != nil {
+		log.Printf("Error getting test documents: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"test_documents": documents,
+		"count":          len(documents),
+		"storage_path":   "test_documents",
+	})
+}
+
+// CleanupTestDocuments cleans only test documents
+func (h *Handler) CleanupTestDocuments(c *gin.Context) {
+	log.Printf("CleanupTestDocuments requested from %s", c.ClientIP())
+
+	if err := h.documentService.CleanupTestDocuments(); err != nil {
+		log.Printf("Error cleaning test documents: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Test documents cleaned up successfully",
+		"path":    "test_documents",
 	})
 }

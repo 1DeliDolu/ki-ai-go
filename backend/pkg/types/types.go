@@ -19,15 +19,16 @@ type WikiResult struct {
 
 // Document represents a document in the system
 type Document struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	Type       string `json:"type"`
-	Size       int64  `json:"size"`
-	UploadDate string `json:"upload_date"`
-	Status     string `json:"status"`
-	Path       string `json:"path,omitempty"`       // File path on disk
-	Chunks     int    `json:"chunks,omitempty"`     // Number of chunks
-	Embeddings bool   `json:"embeddings,omitempty"` // Whether embeddings are created
+	ID         string            `json:"id"`
+	Name       string            `json:"name"`
+	Type       string            `json:"type"`
+	Size       int64             `json:"size"`
+	UploadDate string            `json:"upload_date"`
+	Status     string            `json:"status"`
+	Path       string            `json:"path,omitempty"`       // File path on disk
+	Metadata   map[string]string `json:"metadata,omitempty"`   // Added metadata field
+	Chunks     int               `json:"chunks,omitempty"`     // Number of chunks
+	Embeddings bool              `json:"embeddings,omitempty"` // Whether embeddings are created
 }
 
 // DocumentChunk represents a chunk of a document for vector storage

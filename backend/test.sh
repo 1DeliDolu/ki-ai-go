@@ -88,6 +88,20 @@ curl -s -X POST -F "file=@test_files/test.csv" http://localhost:8082/api/v1/docu
 rm -rf test_files
 
 echo ""
+echo "📄 Testing frontend document upload simulation..."
+# Simulate frontend document upload
+echo "Testing frontend document upload..."
+curl -s -X POST -F "file=@test_files/test.txt" http://localhost:8082/api/v1/documents/upload | jq . 2>/dev/null || curl -s -X POST -F "file=@test_files/test.txt" http://localhost:8082/api/v1/documents/upload
+
+echo ""
+echo "📁 Testing test documents endpoint..."
+curl -s http://localhost:8082/api/v1/documents/test | jq . 2>/dev/null || curl -s http://localhost:8082/api/v1/documents/test
+
+echo ""
+echo "🧹 Testing test documents cleanup..."
+curl -s -X POST http://localhost:8082/api/v1/cleanup/test-documents | jq . 2>/dev/null || curl -s -X POST http://localhost:8082/api/v1/cleanup/test-documents
+
+echo ""
 echo "✅ API tests completed!"
 echo ""
 echo "🌐 You can also test in browser:"

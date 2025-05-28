@@ -9,13 +9,14 @@ import (
 )
 
 type Config struct {
-	Port         string
-	ModelsPath   string
-	UploadsPath  string
-	DatabasePath string
-	OllamaURL    string
-	MaxFileSize  int64
-	AllowedTypes []string
+	Port              string
+	ModelsPath        string
+	UploadsPath       string
+	TestDocumentsPath string // Frontend'den yüklenen dokümanlar için
+	DatabasePath      string
+	OllamaURL         string
+	MaxFileSize       int64
+	AllowedTypes      []string
 	// Llama specific settings
 	LlamaModelPath   string
 	LlamaContextSize int
@@ -43,6 +44,7 @@ func Load() *Config {
 	// Create directories if they don't exist
 	os.MkdirAll(filepath.Join(appDir, "models"), 0755)
 	os.MkdirAll(filepath.Join(appDir, "uploads"), 0755)
+	os.MkdirAll(filepath.Join(appDir, "test_documents"), 0755) // Test dokümanları için
 	os.MkdirAll(filepath.Join(appDir, "data"), 0755)
 
 	// Auto-detect number of threads
@@ -52,13 +54,14 @@ func Load() *Config {
 	}
 
 	return &Config{
-		Port:         port,
-		ModelsPath:   filepath.Join(appDir, "models"),
-		UploadsPath:  filepath.Join(appDir, "uploads"),
-		DatabasePath: dbPath,
-		OllamaURL:    getEnv("OLLAMA_URL", "http://localhost:11434"),
-		MaxFileSize:  50 * 1024 * 1024, // 50MB
-		AllowedTypes: []string{".pdf", ".txt", ".docx", ".md"},
+		Port:              port,
+		ModelsPath:        filepath.Join(appDir, "models"),
+		UploadsPath:       filepath.Join(appDir, "uploads"),
+		TestDocumentsPath: filepath.Join(appDir, "test_documents"), // Frontend dokümanları
+		DatabasePath:      dbPath,
+		OllamaURL:         getEnv("OLLAMA_URL", "http://localhost:11434"),
+		MaxFileSize:       50 * 1024 * 1024, // 50MB
+		AllowedTypes:      []string{".pdf", ".txt", ".docx", ".md"},
 		// Llama settings
 		LlamaModelPath:   filepath.Join(appDir, "models"),
 		LlamaContextSize: getEnvInt("LLAMA_CONTEXT_SIZE", 2048),

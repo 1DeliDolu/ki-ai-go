@@ -31,9 +31,14 @@ func NewDocumentService(db interface{}, cfg *config.Config) *DocumentService {
 		memDB = storage.InitMemoryDB()
 	}
 
-	// Ensure uploads directory exists
+	// Ensure both directories exist
 	if err := os.MkdirAll(cfg.UploadsPath, 0755); err != nil {
 		log.Printf("Warning: Failed to create uploads directory: %v", err)
+	}
+
+	// Create test_documents directory for frontend uploads
+	if err := os.MkdirAll(cfg.TestDocumentsPath, 0755); err != nil {
+		log.Printf("Warning: Failed to create test_documents directory: %v", err)
 	}
 
 	return &DocumentService{
@@ -182,16 +187,30 @@ func (s *DocumentService) ValidateUploadedFile(fileHeader *multipart.FileHeader)
 	return nil
 }
 
-// UploadDocument with enhanced validation
+// UploadDocument with frontend document support
 func (s *DocumentService) UploadDocument(fileHeader *multipart.FileHeader) (*types.Document, error) {
 	// Validate file before upload
 	if err := s.ValidateUploadedFile(fileHeader); err != nil {
 		return nil, err
 	}
 
-	// Create uploads directory if it doesn't exist
-	if err := os.MkdirAll(s.config.UploadsPath, 0755); err != nil {
-		return nil, err
+	// Determine save path - frontend uploads go to test_documents
+	var savePath string
+	isFromFrontend := true // Frontend'den geldiğini varsayıyoruz
+
+	if isFromFrontend {
+		// Frontend dokümanları test_documents'e kaydet
+		if err := os.MkdirAll(s.config.TestDocumentsPath, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create test_documents directory: %w", err)
+		}
+		savePath = s.config.TestDocumentsPath
+		log.Printf("📁 Saving frontend document to test_documents: %s", fileHeader.Filename)
+	} else {
+		// API dokümanları uploads'e kaydet
+		if err := os.MkdirAll(s.config.UploadsPath, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create uploads directory: %w", err)
+		}
+		savePath = s.config.UploadsPath
 	}
 
 	// Open the uploaded file
@@ -201,23 +220,24 @@ func (s *DocumentService) UploadDocument(fileHeader *multipart.FileHeader) (*typ
 	}
 	defer file.Close()
 
-	// Create unique filename
-	filename := fmt.Sprintf("%d_%s", time.Now().Unix(), fileHeader.Filename)
-	filePath := filepath.Join(s.config.UploadsPath, filename)
+	// Create unique filename with timestamp
+	timestamp := time.Now().Format("20060102_150405")
+	filename := fmt.Sprintf("%s_%s", timestamp, fileHeader.Filename)
+	filePath := filepath.Join(savePath, filename)
 
 	// Create the destination file
 	dst, err := os.Create(filePath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create file: %w", err)
 	}
 	defer dst.Close()
 
 	// Copy file content
 	if _, err = io.Copy(dst, file); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to save file: %w", err)
 	}
 
-	// Create document with correct fields
+	// Create document with enhanced metadata
 	doc := &types.Document{
 		Name:       fileHeader.Filename,
 		Type:       filepath.Ext(fileHeader.Filename),
@@ -227,13 +247,75 @@ func (s *DocumentService) UploadDocument(fileHeader *multipart.FileHeader) (*typ
 		Path:       filePath,
 	}
 
+	// Add metadata about storage location
+	doc.Metadata = map[string]string{
+		"storage_location": func() string {
+			if isFromFrontend {
+				return "test_documents"
+			}
+			return "uploads"
+		}(),
+		"original_filename": fileHeader.Filename,
+		"saved_filename":    filename,
+		"upload_source":     "frontend",
+	}
+
 	// Save to memory database
 	if err := s.memDB.CreateDocument(doc); err != nil {
+		return nil, fmt.Errorf("failed to save to database: %w", err)
+	}
+
+	log.Printf("✅ Document uploaded successfully: %s -> %s", doc.Name, filePath)
+	return doc, nil
+}
+
+// GetTestDocuments returns documents from test_documents folder
+func (s *DocumentService) GetTestDocuments() ([]types.Document, error) {
+	docs, err := s.memDB.ListDocuments()
+	if err != nil {
 		return nil, err
 	}
 
-	log.Printf("Document uploaded successfully: %s", doc.Name)
-	return doc, nil
+	var testDocs []types.Document
+	for _, doc := range docs {
+		if doc.Metadata != nil && doc.Metadata["storage_location"] == "test_documents" {
+			testDocs = append(testDocs, *doc)
+		}
+	}
+
+	log.Printf("Found %d documents in test_documents", len(testDocs))
+	return testDocs, nil
+}
+
+// CleanupTestDocuments cleans up test_documents folder
+func (s *DocumentService) CleanupTestDocuments() error {
+	log.Println("🧹 Cleaning up test_documents folder...")
+
+	// Get all test documents
+	testDocs, err := s.GetTestDocuments()
+	if err != nil {
+		return fmt.Errorf("failed to get test documents: %w", err)
+	}
+
+	// Delete each document
+	for _, doc := range testDocs {
+		if err := s.DeleteDocument(doc.ID); err != nil {
+			log.Printf("Warning: Failed to delete test document %s: %v", doc.Name, err)
+		}
+	}
+
+	// Clean the directory
+	if err := os.RemoveAll(s.config.TestDocumentsPath); err != nil {
+		return fmt.Errorf("failed to remove test_documents directory: %w", err)
+	}
+
+	// Recreate the directory
+	if err := os.MkdirAll(s.config.TestDocumentsPath, 0755); err != nil {
+		return fmt.Errorf("failed to recreate test_documents directory: %w", err)
+	}
+
+	log.Printf("✅ Cleaned up %d test documents", len(testDocs))
+	return nil
 }
 
 func (s *DocumentService) SearchDocuments(query string) ([]types.Document, error) {
@@ -320,4 +402,40 @@ func (s *DocumentService) GetSupportedDocumentTypes() []string {
 // GetDocument returns a document by ID
 func (s *DocumentService) GetDocument(documentID string) (*types.Document, error) {
 	return s.memDB.GetDocument(documentID)
+}
+
+// GetDocumentFileInfo returns comprehensive file information
+func (s *DocumentService) GetDocumentFileInfo(documentID string) (*utils.FileInfo, error) {
+	doc, err := s.memDB.GetDocument(documentID)
+	if err != nil {
+		return nil, fmt.Errorf("document not found: %w", err)
+	}
+
+	if doc.Path == "" {
+		return nil, fmt.Errorf("document path not available")
+	}
+
+	// Get document content
+	content, err := s.documentManager.ProcessDocument(doc.Path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to process document: %w", err)
+	}
+
+	// Get comprehensive file info
+	return utils.GetFileInfo(doc.Path, content)
+}
+
+// GetDocumentAnalysis provides content analysis
+func (s *DocumentService) GetDocumentAnalysis(documentID string) (map[string]interface{}, error) {
+	content, err := s.GetDocumentContent(documentID)
+	if err != nil {
+		return nil, err
+	}
+
+	analysis := utils.AnalyzeContent(content.Text)
+	analysis["processing_metadata"] = content.Metadata
+	analysis["processed_at"] = content.ProcessedAt.Format(time.RFC3339)
+	analysis["document_type"] = content.Type
+
+	return analysis, nil
 }

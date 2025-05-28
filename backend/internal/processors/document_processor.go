@@ -12,6 +12,9 @@ import (
 	"time"
 
 	"github.com/1DeliDolu/ki-ai-go/pkg/types"
+	"github.com/PuerkitoBio/goquery"
+	"github.com/ledongthuc/pdf"
+	"github.com/nguyenthenguyen/docx"
 )
 
 // DocumentProcessor interface for different document types
@@ -278,42 +281,145 @@ func (p *MarkdownProcessor) GetSupportedTypes() []string {
 	return []string{"md", "markdown"}
 }
 
-// HTMLProcessor handles HTML files (basic implementation without external libs)
+// HTMLProcessor handles HTML files with enhanced extraction
 type HTMLProcessor struct{}
 
 func (p *HTMLProcessor) Read(path string) (*types.DocumentContent, error) {
+	log.Printf("🔄 Processing HTML with enhanced extraction: %s", filepath.Base(path))
+
+	content, err := p.extractHTMLContentAdvanced(path)
+	if err != nil {
+		log.Printf("⚠️ Advanced HTML extraction failed, using basic: %v", err)
+		return p.extractHTMLContentBasic(path)
+	}
+
+	// Get original content for metadata
+	originalContent, _ := os.ReadFile(path)
+	originalText := string(originalContent)
+
+	// Count elements
+	linkCount := strings.Count(strings.ToLower(originalText), "<a ")
+	imgCount := strings.Count(strings.ToLower(originalText), "<img ")
+	headerCount := 0
+	for i := 1; i <= 6; i++ {
+		headerCount += strings.Count(strings.ToLower(originalText), fmt.Sprintf("<h%d", i))
+	}
+
+	// Extract title using goquery
+	title := p.extractTitleAdvanced(path)
+
+	return &types.DocumentContent{
+		Text: content,
+		Type: "html",
+		Metadata: map[string]string{
+			"title":        title,
+			"word_count":   fmt.Sprintf("%d", len(strings.Fields(content))),
+			"char_count":   fmt.Sprintf("%d", len(content)),
+			"link_count":   fmt.Sprintf("%d", linkCount),
+			"image_count":  fmt.Sprintf("%d", imgCount),
+			"header_count": fmt.Sprintf("%d", headerCount),
+			"method":       "goquery",
+			"status":       "advanced_extraction",
+		},
+		ProcessedAt: time.Now(),
+	}, nil
+}
+
+func (p *HTMLProcessor) GetSupportedTypes() []string {
+	return []string{"html", "htm"}
+}
+
+func (p *HTMLProcessor) extractHTMLContentAdvanced(path string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	doc, err := goquery.NewDocumentFromReader(file)
+	if err != nil {
+		return "", err
+	}
+
+	// Remove script and style elements
+	doc.Find("script, style, noscript").Remove()
+
+	// Extract text content with better formatting
+	var content strings.Builder
+
+	// Get title if exists
+	title := doc.Find("title").First().Text()
+	if title != "" {
+		content.WriteString("TITLE: " + strings.TrimSpace(title) + "\n\n")
+	}
+
+	// Get main content areas
+	body := doc.Find("body")
+	if body.Length() == 0 {
+		// If no body, get all text
+		content.WriteString(strings.TrimSpace(doc.Text()))
+	} else {
+		// Process body content with better structure
+		body.Children().Each(func(i int, s *goquery.Selection) {
+			text := strings.TrimSpace(s.Text())
+			if text != "" {
+				tagName := goquery.NodeName(s)
+				if tagName == "h1" || tagName == "h2" || tagName == "h3" {
+					content.WriteString("\n" + strings.ToUpper(tagName) + ": " + text + "\n")
+				} else if tagName == "p" {
+					content.WriteString(text + "\n\n")
+				} else {
+					content.WriteString(text + "\n")
+				}
+			}
+		})
+	}
+
+	result := content.String()
+	if strings.TrimSpace(result) == "" {
+		return "", fmt.Errorf("no text content extracted")
+	}
+
+	return result, nil
+}
+
+func (p *HTMLProcessor) extractTitleAdvanced(path string) string {
+	file, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer file.Close()
+
+	doc, err := goquery.NewDocumentFromReader(file)
+	if err != nil {
+		return ""
+	}
+
+	return strings.TrimSpace(doc.Find("title").First().Text())
+}
+
+func (p *HTMLProcessor) extractHTMLContentBasic(path string) (*types.DocumentContent, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open HTML file: %w", err)
 	}
 
 	text := string(content)
-
-	// Basic text extraction - remove HTML tags
 	text = p.stripHTMLTags(text)
 
-	// Count basic HTML elements in original content
+	// Basic metadata
 	originalContent := string(content)
-	linkCount := strings.Count(strings.ToLower(originalContent), "<a ")
-	imgCount := strings.Count(strings.ToLower(originalContent), "<img ")
-	headerCount := 0
-	for i := 1; i <= 6; i++ {
-		headerCount += strings.Count(strings.ToLower(originalContent), fmt.Sprintf("<h%d", i))
-	}
-
-	// Extract title
 	title := p.extractTitle(originalContent)
 
 	return &types.DocumentContent{
 		Text: text,
 		Type: "html",
 		Metadata: map[string]string{
-			"title":        title,
-			"word_count":   fmt.Sprintf("%d", len(strings.Fields(text))),
-			"char_count":   fmt.Sprintf("%d", len(text)),
-			"link_count":   fmt.Sprintf("%d", linkCount),
-			"image_count":  fmt.Sprintf("%d", imgCount),
-			"header_count": fmt.Sprintf("%d", headerCount),
+			"title":      title,
+			"word_count": fmt.Sprintf("%d", len(strings.Fields(text))),
+			"char_count": fmt.Sprintf("%d", len(text)),
+			"method":     "basic",
+			"status":     "fallback_extraction",
 		},
 		ProcessedAt: time.Now(),
 	}, nil
@@ -367,94 +473,179 @@ func (p *HTMLProcessor) extractTitle(content string) string {
 	return strings.TrimSpace(content[start : start+end])
 }
 
-func (p *HTMLProcessor) GetSupportedTypes() []string {
-	return []string{"html", "htm"}
-}
-
-// PDFProcessor handles PDF files with fallback implementation
+// PDFProcessor handles PDF files with real content extraction
 type PDFProcessor struct{}
 
 func (p *PDFProcessor) Read(path string) (*types.DocumentContent, error) {
-	// Try to use a simple fallback for now
-	content, err := p.extractPDFContentBasic(path)
+	log.Printf("🔄 Processing PDF with external library: %s", filepath.Base(path))
+
+	// Try enhanced PDF extraction first
+	content, err := p.extractPDFContentAdvanced(path)
 	if err != nil {
-		return &types.DocumentContent{
-			Text: "PDF content extraction not available - file detected but cannot read content",
-			Type: "pdf",
-			Metadata: map[string]string{
-				"status": "extraction_failed",
-				"error":  err.Error(),
-			},
-			ProcessedAt: time.Now(),
-		}, nil
+		log.Printf("⚠️ Advanced PDF extraction failed, using fallback: %v", err)
+		// Fall back to basic implementation
+		return p.extractPDFContentBasic(path)
 	}
 
 	stat, _ := os.Stat(path)
+	wordCount := len(strings.Fields(content))
+	lineCount := len(strings.Split(content, "\n"))
 
 	return &types.DocumentContent{
 		Text: content,
 		Type: "pdf",
 		Metadata: map[string]string{
-			"file_size": fmt.Sprintf("%d", stat.Size()),
-			"status":    "basic_extraction",
+			"file_size":  fmt.Sprintf("%d", stat.Size()),
+			"word_count": fmt.Sprintf("%d", wordCount),
+			"line_count": fmt.Sprintf("%d", lineCount),
+			"char_count": fmt.Sprintf("%d", len(content)),
+			"status":     "advanced_extraction",
+			"method":     "ledongthuc/pdf",
 		},
 		ProcessedAt: time.Now(),
 	}, nil
-}
-
-func (p *PDFProcessor) extractPDFContentBasic(path string) (string, error) {
-	// Basic PDF content extraction placeholder
-	// In real implementation, this would use a PDF library
-	return fmt.Sprintf("PDF file detected: %s\nContent extraction requires PDF processing library.",
-		filepath.Base(path)), nil
 }
 
 func (p *PDFProcessor) GetSupportedTypes() []string {
 	return []string{"pdf"}
 }
 
-// DOCXProcessor handles Word documents with fallback implementation
-type DOCXProcessor struct{}
-
-func (p *DOCXProcessor) Read(path string) (*types.DocumentContent, error) {
-	// Try to extract DOCX content
-	content, err := p.extractDOCXContentBasic(path)
+func (p *PDFProcessor) extractPDFContentAdvanced(path string) (string, error) {
+	f, r, err := pdf.Open(path)
 	if err != nil {
-		return &types.DocumentContent{
-			Text: "DOCX content extraction not available - file detected but cannot read content",
-			Type: "docx",
-			Metadata: map[string]string{
-				"status": "extraction_failed",
-				"error":  err.Error(),
-			},
-			ProcessedAt: time.Now(),
-		}, nil
+		return "", fmt.Errorf("failed to open PDF: %w", err)
+	}
+	defer f.Close()
+
+	var content strings.Builder
+	totalPages := r.NumPage()
+
+	log.Printf("📄 PDF has %d pages", totalPages)
+
+	for pageIndex := 1; pageIndex <= totalPages; pageIndex++ {
+		page := r.Page(pageIndex)
+		if page.V.IsNull() {
+			continue
+		}
+
+		// Fix: GetPlainText now requires fonts parameter - pass nil for auto-detection
+		text, err := page.GetPlainText(nil)
+		if err != nil {
+			log.Printf("⚠️ Error reading page %d: %v", pageIndex, err)
+			continue
+		}
+
+		if strings.TrimSpace(text) != "" {
+			content.WriteString(fmt.Sprintf("--- Page %d ---\n", pageIndex))
+			content.WriteString(text)
+			content.WriteString("\n\n")
+		}
 	}
 
+	if content.Len() == 0 {
+		return "", fmt.Errorf("no text content extracted from PDF")
+	}
+
+	return content.String(), nil
+}
+
+func (p *PDFProcessor) extractPDFContentBasic(path string) (*types.DocumentContent, error) {
 	stat, _ := os.Stat(path)
-	wordCount := len(strings.Fields(content))
 
 	return &types.DocumentContent{
-		Text: content,
-		Type: "docx",
+		Text: fmt.Sprintf("PDF file detected: %s\nAdvanced PDF extraction failed. File contains %d bytes.\nConsider using a different PDF library for better text extraction.",
+			filepath.Base(path), stat.Size()),
+		Type: "pdf",
 		Metadata: map[string]string{
-			"word_count": fmt.Sprintf("%d", wordCount),
-			"file_size":  fmt.Sprintf("%d", stat.Size()),
-			"status":     "basic_extraction",
+			"file_size": fmt.Sprintf("%d", stat.Size()),
+			"status":    "basic_fallback",
+			"method":    "fallback",
 		},
 		ProcessedAt: time.Now(),
 	}, nil
 }
 
-func (p *DOCXProcessor) extractDOCXContentBasic(path string) (string, error) {
-	// Basic DOCX content extraction placeholder
-	// In real implementation, this would use a DOCX library
-	return fmt.Sprintf("DOCX file detected: %s\nContent extraction requires DOCX processing library.",
-		filepath.Base(path)), nil
+// DOCXProcessor handles Word documents with real content extraction
+type DOCXProcessor struct{}
+
+func (p *DOCXProcessor) Read(path string) (*types.DocumentContent, error) {
+	log.Printf("🔄 Processing DOCX with external library: %s", filepath.Base(path))
+
+	// Try enhanced DOCX extraction first
+	content, err := p.extractDOCXContentAdvanced(path)
+	if err != nil {
+		log.Printf("⚠️ Advanced DOCX extraction failed, using fallback: %v", err)
+		// Fall back to basic implementation
+		return p.extractDOCXContentBasic(path)
+	}
+
+	stat, _ := os.Stat(path)
+	wordCount := len(strings.Fields(content))
+	lineCount := len(strings.Split(content, "\n"))
+
+	return &types.DocumentContent{
+		Text: content,
+		Type: "docx",
+		Metadata: map[string]string{
+			"file_size":  fmt.Sprintf("%d", stat.Size()),
+			"word_count": fmt.Sprintf("%d", wordCount),
+			"line_count": fmt.Sprintf("%d", lineCount),
+			"char_count": fmt.Sprintf("%d", len(content)),
+			"status":     "advanced_extraction",
+			"method":     "nguyenthenguyen/docx",
+		},
+		ProcessedAt: time.Now(),
+	}, nil
 }
 
 func (p *DOCXProcessor) GetSupportedTypes() []string {
 	return []string{"docx", "doc"}
+}
+
+func (p *DOCXProcessor) extractDOCXContentAdvanced(path string) (string, error) {
+	r, err := docx.ReadDocxFile(path)
+	if err != nil {
+		return "", fmt.Errorf("failed to open DOCX: %w", err)
+	}
+	defer r.Close()
+
+	docx1 := r.Editable()
+	content := docx1.GetContent()
+
+	if strings.TrimSpace(content) == "" {
+		return "", fmt.Errorf("no text content extracted from DOCX")
+	}
+
+	// Clean up the content
+	content = strings.ReplaceAll(content, "\r\n", "\n")
+	content = strings.ReplaceAll(content, "\r", "\n")
+
+	// Remove excessive blank lines
+	lines := strings.Split(content, "\n")
+	var cleanLines []string
+	for _, line := range lines {
+		if strings.TrimSpace(line) != "" || len(cleanLines) == 0 || strings.TrimSpace(cleanLines[len(cleanLines)-1]) != "" {
+			cleanLines = append(cleanLines, line)
+		}
+	}
+
+	return strings.Join(cleanLines, "\n"), nil
+}
+
+func (p *DOCXProcessor) extractDOCXContentBasic(path string) (*types.DocumentContent, error) {
+	stat, _ := os.Stat(path)
+
+	return &types.DocumentContent{
+		Text: fmt.Sprintf("DOCX file detected: %s\nAdvanced DOCX extraction failed. File contains %d bytes.\nConsider checking the file format or using a different library.",
+			filepath.Base(path), stat.Size()),
+		Type: "docx",
+		Metadata: map[string]string{
+			"file_size": fmt.Sprintf("%d", stat.Size()),
+			"status":    "basic_fallback",
+			"method":    "fallback",
+		},
+		ProcessedAt: time.Now(),
+	}, nil
 }
 
 // JSONProcessor handles JSON files

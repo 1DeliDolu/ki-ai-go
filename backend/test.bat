@@ -30,7 +30,19 @@ echo Response:
 curl -s http://localhost:8082/api/v1/documents/types
 
 echo.
+echo 📁 Testing test documents endpoint...
+curl -s http://localhost:8082/api/v1/documents/test
+
+echo.
+echo 🧹 Testing test documents cleanup...
+curl -s -X POST http://localhost:8082/api/v1/cleanup/test-documents
+
+echo.
 echo ✅ API tests completed!
+echo.
+echo 💡 Frontend document endpoints:
+echo     GET /api/v1/documents/test - List test documents
+echo     POST /api/v1/cleanup/test-documents - Clean test documents
 echo.
 echo 🌐 You can also test in browser:
 echo     http://localhost:8082/health
