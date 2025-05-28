@@ -58,14 +58,6 @@ func FormatFileSize(bytes int64) string {
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
-// GetContentPreview returns a preview of content
-func GetContentPreview(content string, maxLength int) string {
-	if len(content) <= maxLength {
-		return content
-	}
-	return content[:maxLength] + "..."
-}
-
 // AnalyzeContent provides content analysis
 func AnalyzeContent(content string) map[string]interface{} {
 	lines := strings.Split(content, "\n")

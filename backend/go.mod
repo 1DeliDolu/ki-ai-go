@@ -3,10 +3,10 @@ module github.com/1DeliDolu/ki-ai-go
 go 1.24.3
 
 require (
-	github.com/PuerkitoBio/goquery v1.8.1
+	github.com/PuerkitoBio/goquery v1.10.3
 	github.com/gin-contrib/cors v1.7.5
 	github.com/gin-gonic/gin v1.10.1
-	github.com/ledongthuc/pdf v0.0.0-20220302134840-0c2507a12d80
+	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	github.com/lib/pq v1.10.9
 	github.com/nguyenthenguyen/docx v0.0.0-20230621112118-9c8e795a11db
 )

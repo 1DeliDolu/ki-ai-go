@@ -1,0 +1,8 @@
+Bu bir test metin dosyasıdır.
+Go ile belge okuma testi yapıyoruz.
+PDF, DOCX, TXT, MD ve HTML formatları destekleniyor.
+
+Bu dosya frontend'den yüklenmiş gibi test edilecek.
+Türkçe karakter desteği: çğıöşü
+Sayılar: 123, 456, 789
+Özel karakterler: !@#$%^&*()

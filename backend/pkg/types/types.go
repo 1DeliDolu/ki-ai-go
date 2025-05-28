@@ -25,7 +25,7 @@ type Document struct {
 	Size       int64             `json:"size"`
 	UploadDate string            `json:"upload_date"`
 	Status     string            `json:"status"`
-	Path       string            `json:"path,omitempty"`       // File path on disk
+	Path       string            `json:"path"`
 	Metadata   map[string]string `json:"metadata,omitempty"`   // Added metadata field
 	Chunks     int               `json:"chunks,omitempty"`     // Number of chunks
 	Embeddings bool              `json:"embeddings,omitempty"` // Whether embeddings are created

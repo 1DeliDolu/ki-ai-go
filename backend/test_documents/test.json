@@ -1,0 +1,32 @@
+{
+  "document": {
+    "title": "Test JSON Document",
+    "description": "Bu bir test JSON belgesidir",
+    "version": "1.0",
+    "created": "2024-01-15",
+    "author": "Local AI Project",
+    "content": {
+      "sections": [
+        {
+          "id": 1,
+          "title": "Giriş",
+          "text": "JSON belge okuma testi"
+        },
+        {
+          "id": 2,
+          "title": "Özellikler",
+          "features": [
+            "JSON parsing",
+            "Metadata extraction", 
+            "Content analysis"
+          ]
+        }
+      ]
+    },
+    "metadata": {
+      "language": "turkish",
+      "encoding": "UTF-8",
+      "keywords": ["test", "json", "document", "ai"]
+    }
+  }
+}
