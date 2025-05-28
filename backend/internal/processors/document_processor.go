@@ -27,12 +27,13 @@ func NewDocumentManager() *DocumentManager {
 		processors: make(map[string]DocumentProcessor),
 	}
 
-	// Register all processors
+	// Register working processors first
 	dm.RegisterProcessor(&TXTProcessor{})
 	dm.RegisterProcessor(&MarkdownProcessor{})
-	dm.RegisterProcessor(&PDFProcessor{})
-	dm.RegisterProcessor(&DOCXProcessor{})
 	dm.RegisterProcessor(&HTMLProcessor{})
+	// TODO: Add PDF and DOCX when dependencies are resolved
+	// dm.RegisterProcessor(&PDFProcessor{})
+	// dm.RegisterProcessor(&DOCXProcessor{})
 
 	return dm
 }
@@ -98,7 +99,7 @@ func (p *TXTProcessor) GetSupportedTypes() []string {
 	return []string{"txt", "text"}
 }
 
-// MarkdownProcessor handles markdown files
+// MarkdownProcessor handles markdown files (basic implementation)
 type MarkdownProcessor struct{}
 
 func (p *MarkdownProcessor) Read(path string) (*types.DocumentContent, error) {
@@ -134,69 +135,104 @@ func (p *MarkdownProcessor) GetSupportedTypes() []string {
 	return []string{"md", "markdown"}
 }
 
-// PDFProcessor handles PDF files (placeholder - will be implemented later)
-type PDFProcessor struct{}
-
-func (p *PDFProcessor) Read(path string) (*types.DocumentContent, error) {
-	// Placeholder implementation
-	return &types.DocumentContent{
-		Text: "PDF processing not yet implemented",
-		Type: "pdf",
-		Metadata: map[string]string{
-			"status": "placeholder",
-		},
-		ProcessedAt: time.Now(),
-	}, nil
-}
-
-func (p *PDFProcessor) GetSupportedTypes() []string {
-	return []string{"pdf"}
-}
-
-// DOCXProcessor handles Word documents (placeholder - will be implemented later)
-type DOCXProcessor struct{}
-
-func (p *DOCXProcessor) Read(path string) (*types.DocumentContent, error) {
-	// Placeholder implementation
-	return &types.DocumentContent{
-		Text: "DOCX processing not yet implemented",
-		Type: "docx",
-		Metadata: map[string]string{
-			"status": "placeholder",
-		},
-		ProcessedAt: time.Now(),
-	}, nil
-}
-
-func (p *DOCXProcessor) GetSupportedTypes() []string {
-	return []string{"docx", "doc"}
-}
-
-// HTMLProcessor handles HTML files (placeholder - will be implemented later)
+// HTMLProcessor handles HTML files (basic implementation without external libs)
 type HTMLProcessor struct{}
 
 func (p *HTMLProcessor) Read(path string) (*types.DocumentContent, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read HTML file: %w", err)
+		return nil, fmt.Errorf("failed to open HTML file: %w", err)
 	}
 
 	text := string(content)
-	// Simple HTML tag removal for text extraction
-	text = strings.ReplaceAll(text, "<", " <")
-	text = strings.ReplaceAll(text, ">", "> ")
+
+	// Basic text extraction - remove HTML tags
+	text = p.stripHTMLTags(text)
+
+	// Count basic HTML elements in original content
+	originalContent := string(content)
+	linkCount := strings.Count(strings.ToLower(originalContent), "<a ")
+	imgCount := strings.Count(strings.ToLower(originalContent), "<img ")
+	headerCount := 0
+	for i := 1; i <= 6; i++ {
+		headerCount += strings.Count(strings.ToLower(originalContent), fmt.Sprintf("<h%d", i))
+	}
+
+	// Extract title
+	title := p.extractTitle(originalContent)
 
 	return &types.DocumentContent{
 		Text: text,
 		Type: "html",
 		Metadata: map[string]string{
-			"char_count": fmt.Sprintf("%d", len(text)),
-			"status":     "basic_extraction",
+			"title":        title,
+			"word_count":   fmt.Sprintf("%d", len(strings.Fields(text))),
+			"char_count":   fmt.Sprintf("%d", len(text)),
+			"link_count":   fmt.Sprintf("%d", linkCount),
+			"image_count":  fmt.Sprintf("%d", imgCount),
+			"header_count": fmt.Sprintf("%d", headerCount),
 		},
 		ProcessedAt: time.Now(),
 	}, nil
 }
 
+func (p *HTMLProcessor) stripHTMLTags(s string) string {
+	// Simple HTML tag removal
+	var result strings.Builder
+	inTag := false
+
+	for _, char := range s {
+		switch char {
+		case '<':
+			inTag = true
+		case '>':
+			inTag = false
+			result.WriteRune(' ') // Replace tag with space
+		default:
+			if !inTag {
+				result.WriteRune(char)
+			}
+		}
+	}
+
+	// Clean up multiple spaces
+	text := result.String()
+	text = strings.ReplaceAll(text, "\n", " ")
+	text = strings.ReplaceAll(text, "\t", " ")
+
+	// Remove multiple consecutive spaces
+	for strings.Contains(text, "  ") {
+		text = strings.ReplaceAll(text, "  ", " ")
+	}
+
+	return strings.TrimSpace(text)
+}
+
+func (p *HTMLProcessor) extractTitle(content string) string {
+	lower := strings.ToLower(content)
+	start := strings.Index(lower, "<title>")
+	if start == -1 {
+		return ""
+	}
+	start += 7 // len("<title>")
+
+	end := strings.Index(lower[start:], "</title>")
+	if end == -1 {
+		return ""
+	}
+
+	return strings.TrimSpace(content[start : start+end])
+}
+
 func (p *HTMLProcessor) GetSupportedTypes() []string {
 	return []string{"html", "htm"}
+}
+
+// FileTypeDetector helps detect file types (basic implementation)
+func DetectFileType(path string) (string, error) {
+	ext := strings.ToLower(filepath.Ext(path))
+	if strings.HasPrefix(ext, ".") {
+		return ext[1:], nil
+	}
+	return ext, nil
 }
