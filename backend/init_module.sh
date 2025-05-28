@@ -25,7 +25,7 @@ if [ -f "go.sum" ]; then
 fi
 
 echo "📦 Initializing Go module..."
-go mod init github.com/1DeliDolu/go_mustAI/local-ai-project/backend
+go mod init github.com/1DeliDolu/ki-ai-go
 
 if [ $? -ne 0 ]; then
     echo "❌ Failed to initialize Go module"
@@ -81,14 +81,15 @@ else
     echo "🔍 Checking import paths..."
     
     # Check for incorrect import paths
-    if grep -r "local-ai-project/backend" . --include="*.go"; then
+    if grep -r "local-ai-project/backend\|go_mustAI/local-ai-project/backend" . --include="*.go"; then
         echo "⚠️  Found old import paths. They should use:"
-        echo "   github.com/1DeliDolu/go_mustAI/local-ai-project/backend"
+        echo "   github.com/1DeliDolu/ki-ai-go"
         echo ""
         echo "🔧 Auto-fixing import paths..."
         
         # Fix import paths in all Go files
-        find . -name "*.go" -type f -exec sed -i 's|local-ai-project/backend|github.com/1DeliDolu/go_mustAI/local-ai-project/backend|g' {} \;
+        find . -name "*.go" -type f -exec sed -i 's|local-ai-project/backend|github.com/1DeliDolu/ki-ai-go|g' {} \;
+        find . -name "*.go" -type f -exec sed -i 's|github.com/1DeliDolu/go_mustAI/local-ai-project/backend|github.com/1DeliDolu/ki-ai-go|g' {} \;
         
         echo "✅ Import paths fixed"
         echo ""

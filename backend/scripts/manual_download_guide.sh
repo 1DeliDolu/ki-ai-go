@@ -4,7 +4,7 @@ echo "📥 Manual Model Download Guide"
 echo "=============================="
 echo ""
 
-MODELS_DIR="/mnt/d/Praxis/KI/lokaleKI/go_mustAI/local-ai-project/models"
+MODELS_DIR="/mnt/d/Praxis/KI/lokaleKI/ki-ai-go/models"
 
 echo "📁 Models will be saved to: $MODELS_DIR"
 echo ""

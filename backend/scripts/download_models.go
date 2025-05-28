@@ -57,7 +57,7 @@ func main() {
 
 	// Create models directory
 	homeDir, _ := os.UserHomeDir()
-	modelsDir := filepath.Join(homeDir, ".local-ai-project", "models")
+	modelsDir := filepath.Join(homeDir, ".ki-ai-go", "models")
 	os.MkdirAll(modelsDir, 0755)
 
 	modelPath := filepath.Join(modelsDir, selectedModel.Name)

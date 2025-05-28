@@ -1,7 +1,7 @@
 AI Models Download Links
 ========================
 
-Save these files to: /mnt/d/Praxis/KI/lokaleKI/go_mustAI/local-ai-project/models/
+Save these files to: /mnt/d/Praxis/KI/lokaleKI/ki-ai-go/models/
 
 OpenChat 3.5 (Save as: openchat-3.5-1210.Q4_K_M.gguf)
 ------------------------------------------------------
@@ -30,14 +30,14 @@ Manual Download Steps
 ====================
 1. Right-click on the download link
 2. Select "Save link as..." or "Download linked file"
-3. Navigate to: /mnt/d/Praxis/KI/lokaleKI/go_mustAI/local-ai-project/models/
+3. Navigate to: /mnt/d/Praxis/KI/lokaleKI/ki-ai-go/models/
 4. Save with the exact filename specified above
 5. Wait for download to complete
 6. Restart your backend server
 
 Command Line Downloads (WSL)
 ============================
-cd /mnt/d/Praxis/KI/lokaleKI/go_mustAI/local-ai-project/models/
+cd /mnt/d/Praxis/KI/lokaleKI/ki-ai-go/models/
 
 # OpenChat 3.5
 wget 'https://huggingface.co/TheBloke/openchat_3.5-GGUF/resolve/main/openchat_3.5.q4_k_m.gguf' -O openchat-3.5-1210.Q4_K_M.gguf

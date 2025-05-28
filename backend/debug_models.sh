@@ -3,7 +3,7 @@
 echo "🔍 Debugging Model Detection"
 echo "============================"
 
-MODELS_DIR="/mnt/d/Praxis/KI/lokaleKI/go_mustAI/local-ai-project/models"
+MODELS_DIR="/mnt/d/Praxis/KI/lokaleKI/ki-ai-go/models"
 
 echo "📁 Models directory: $MODELS_DIR"
 echo ""

@@ -1,4 +1,4 @@
-module github.com/1DeliDolu/go_mustAI/local-ai-project/backend
+module github.com/1DeliDolu/ki-ai-go
 
 go 1.24.3
 
@@ -6,6 +6,7 @@ require (
 	github.com/gin-contrib/cors v1.7.5
 	github.com/gin-gonic/gin v1.10.1
 	github.com/lib/pq v1.10.9 // PostgreSQL driver
+	github.com/unidoc/unipdf/v3 v3.69.0 // PDF processing
 )
 
 require (

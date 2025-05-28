@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/1DeliDolu/go_mustAI/local-ai-project/backend/internal/services"
-	"github.com/1DeliDolu/go_mustAI/local-ai-project/backend/pkg/types"
+	"github.com/1DeliDolu/ki-ai-go/internal/services"
+	"github.com/1DeliDolu/ki-ai-go/pkg/types"
 
 	"github.com/gin-gonic/gin"
 )

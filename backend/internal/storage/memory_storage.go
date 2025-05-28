@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/1DeliDolu/go_mustAI/local-ai-project/backend/pkg/types"
+	"github.com/1DeliDolu/ki-ai-go/pkg/types"
 )
 
 // MemoryDB implements a simple in-memory database using maps and slices

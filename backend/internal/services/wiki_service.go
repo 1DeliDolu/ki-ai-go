@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/1DeliDolu/go_mustAI/local-ai-project/backend/pkg/types"
+	"github.com/1DeliDolu/ki-ai-go/pkg/types"
 )
 
 type WikiService struct {

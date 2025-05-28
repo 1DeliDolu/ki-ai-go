@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/1DeliDolu/go_mustAI/local-ai-project/backend/internal/config"
-	"github.com/1DeliDolu/go_mustAI/local-ai-project/backend/internal/storage"
-	"github.com/1DeliDolu/go_mustAI/local-ai-project/backend/pkg/types"
+	"github.com/1DeliDolu/ki-ai-go/internal/config"
+	"github.com/1DeliDolu/ki-ai-go/internal/storage"
+	"github.com/1DeliDolu/ki-ai-go/pkg/types"
 )
 
 type DocumentService struct {

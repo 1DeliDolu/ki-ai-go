@@ -2,7 +2,7 @@
 
 echo "Setting up your downloaded models for Ollama..."
 
-MODELS_DIR="/mnt/d/Praxis/KI/lokaleKI/go_mustAI/local-ai-project/models"
+MODELS_DIR="/mnt/d/Praxis/KI/lokaleKI/ki-ai-go/models"
 
 # Check if models directory exists
 if [ ! -d "$MODELS_DIR" ]; then

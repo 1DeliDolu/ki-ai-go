@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/1DeliDolu/go_mustAI/local-ai-project/backend/internal/config"
+	"github.com/1DeliDolu/ki-ai-go/internal/config"
 )
 
 type CleanupService struct {

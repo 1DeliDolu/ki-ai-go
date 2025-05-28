@@ -3,13 +3,14 @@
 echo "🔧 Fixing import paths in Go files"
 echo "=================================="
 
-MODULE_NAME="github.com/1DeliDolu/go_mustAI/local-ai-project/backend"
-OLD_IMPORT="local-ai-project/backend"
+MODULE_NAME="github.com/1DeliDolu/ki-ai-go"
+OLD_IMPORT1="local-ai-project/backend"
+OLD_IMPORT2="github.com/1DeliDolu/go_mustAI/local-ai-project/backend"
 
 echo "📁 Scanning for files with incorrect imports..."
 
 # Find all Go files with old import paths
-FILES_TO_FIX=$(grep -r "$OLD_IMPORT" . --include="*.go" -l 2>/dev/null)
+FILES_TO_FIX=$(grep -r -E "$OLD_IMPORT1|$OLD_IMPORT2" . --include="*.go" -l 2>/dev/null)
 
 if [ -z "$FILES_TO_FIX" ]; then
     echo "✅ No files need fixing - all imports are correct"
@@ -26,8 +27,9 @@ echo "🔄 Fixing import paths..."
 while IFS= read -r file; do
     if [ -f "$file" ]; then
         echo "  Fixing: $file"
-        # Use sed to replace the import path
-        sed -i "s|$OLD_IMPORT|$MODULE_NAME|g" "$file"
+        # Use sed to replace the import paths
+        sed -i "s|$OLD_IMPORT1|$MODULE_NAME|g" "$file"
+        sed -i "s|$OLD_IMPORT2|$MODULE_NAME|g" "$file"
     fi
 done <<< "$FILES_TO_FIX"
 
