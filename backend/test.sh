@@ -28,6 +28,12 @@ curl -s http://localhost:8082/api/v1/documents | jq . 2>/dev/null || curl -s htt
 echo ""
 
 echo ""
+echo "📄 Testing document types endpoint..."
+echo "Response:"
+curl -s http://localhost:8082/api/v1/documents/types | jq . 2>/dev/null || curl -s http://localhost:8082/api/v1/documents/types
+echo ""
+
+echo ""
 echo "✅ API tests completed!"
 echo ""
 echo "🌐 You can also test in browser:"

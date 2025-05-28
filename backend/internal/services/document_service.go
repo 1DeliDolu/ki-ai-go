@@ -11,13 +11,15 @@ import (
 	"time"
 
 	"github.com/1DeliDolu/ki-ai-go/internal/config"
+	"github.com/1DeliDolu/ki-ai-go/internal/handlers"
 	"github.com/1DeliDolu/ki-ai-go/internal/storage"
 	"github.com/1DeliDolu/ki-ai-go/pkg/types"
 )
 
 type DocumentService struct {
-	memDB  *storage.MemoryDB
-	config *config.Config
+	memDB           *storage.MemoryDB
+	config          *config.Config
+	documentManager *handlers.DocumentManager
 }
 
 func NewDocumentService(db interface{}, cfg *config.Config) *DocumentService {
@@ -34,8 +36,9 @@ func NewDocumentService(db interface{}, cfg *config.Config) *DocumentService {
 	}
 
 	return &DocumentService{
-		memDB:  memDB,
-		config: cfg,
+		memDB:           memDB,
+		config:          cfg,
+		documentManager: handlers.NewDocumentManager(),
 	}
 }
 
@@ -106,21 +109,45 @@ func (s *DocumentService) UploadDocument(fileHeader *multipart.FileHeader) (*typ
 }
 
 func (s *DocumentService) extractTextContent(filePath, originalName string) (string, error) {
-	ext := filepath.Ext(originalName)
-
-	switch ext {
-	case ".txt", ".md":
-		content, err := os.ReadFile(filePath)
-		return string(content), err
-	case ".pdf":
-		// TODO: Implement PDF text extraction
-		return "PDF text extraction not implemented yet", nil
-	case ".docx":
-		// TODO: Implement DOCX text extraction
-		return "DOCX text extraction not implemented yet", nil
-	default:
-		return "", fmt.Errorf("unsupported file type: %s", ext)
+	// Use the new document manager for content extraction
+	content, err := s.documentManager.ProcessDocument(filePath)
+	if err != nil {
+		// Fallback to old method if new processor fails
+		ext := filepath.Ext(originalName)
+		switch ext {
+		case ".txt", ".md":
+			fileContent, err := os.ReadFile(filePath)
+			return string(fileContent), err
+		default:
+			return "", fmt.Errorf("unsupported file type: %s", ext)
+		}
 	}
+
+	return content.Text, nil
+}
+
+// GetDocumentContent extracts content from a document
+func (s *DocumentService) GetDocumentContent(documentID string) (*types.DocumentContent, error) {
+	doc, err := s.memDB.GetDocument(documentID)
+	if err != nil {
+		return nil, fmt.Errorf("document not found: %w", err)
+	}
+
+	if doc.Path == "" {
+		return nil, fmt.Errorf("document path not available")
+	}
+
+	content, err := s.documentManager.ProcessDocument(doc.Path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to process document: %w", err)
+	}
+
+	return content, nil
+}
+
+// GetSupportedDocumentTypes returns all supported document types
+func (s *DocumentService) GetSupportedDocumentTypes() []string {
+	return s.documentManager.GetSupportedTypes()
 }
 
 func (s *DocumentService) SearchDocuments(query string) ([]types.Document, error) {

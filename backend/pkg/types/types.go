@@ -3,6 +3,7 @@ package types
 
 import (
 	"mime/multipart"
+	"time"
 )
 
 // WikiResult represents a Wikipedia search result
@@ -94,4 +95,12 @@ type ErrorResponse struct {
 type SuccessResponse struct {
 	Message string      `json:"message"`
 	Data    interface{} `json:"data,omitempty"`
+}
+
+// DocumentContent represents processed content from a document
+type DocumentContent struct {
+	Text        string            `json:"text"`
+	Type        string            `json:"type"`
+	Metadata    map[string]string `json:"metadata"`
+	ProcessedAt time.Time         `json:"processed_at"`
 }

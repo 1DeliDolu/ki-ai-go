@@ -186,6 +186,34 @@ func (h *Handler) DeleteDocument(c *gin.Context) {
 	})
 }
 
+// GetDocumentContent returns the processed content of a document
+func (h *Handler) GetDocumentContent(c *gin.Context) {
+	documentID := c.Param("id")
+	if documentID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Document ID is required"})
+		return
+	}
+
+	content, err := h.documentService.GetDocumentContent(documentID)
+	if err != nil {
+		log.Printf("Error getting document content: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"content": content,
+	})
+}
+
+// GetSupportedDocumentTypes returns all supported document types
+func (h *Handler) GetSupportedDocumentTypes(c *gin.Context) {
+	types := h.documentService.GetSupportedDocumentTypes()
+	c.JSON(http.StatusOK, gin.H{
+		"supported_types": types,
+	})
+}
+
 // Wiki handlers
 func (h *Handler) SearchWiki(c *gin.Context) {
 	query := c.Query("q")
