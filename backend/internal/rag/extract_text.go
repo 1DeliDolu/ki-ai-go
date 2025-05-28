@@ -2,12 +2,11 @@ package rag
 
 import (
 	"errors"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/ledongthuc/docx"
+	"github.com/nguyenthenguyen/docx"
 	"github.com/unidoc/unipdf/v3/extractor"
 	"github.com/unidoc/unipdf/v3/model"
 	"golang.org/x/net/html"
@@ -32,7 +31,7 @@ func ExtractText(path string) (string, error) {
 }
 
 func extractPDF(path string) (string, error) {
-	reader, err := model.NewPdfReaderFromFile(path, nil)
+	reader, _, err := model.NewPdfReaderFromFile(path, nil)
 	if err != nil {
 		return "", err
 	}
@@ -48,7 +47,7 @@ func extractPDF(path string) (string, error) {
 }
 
 func extractTXT(path string) (string, error) {
-	content, err := ioutil.ReadFile(path)
+	content, err := os.ReadFile(path)
 	return string(content), err
 }
 
