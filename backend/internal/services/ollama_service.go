@@ -12,29 +12,10 @@ import (
 	"github.com/1DeliDolu/ki-ai-go/pkg/types"
 )
 
+// OllamaService handles communication with Ollama API
 type OllamaService struct {
 	client  *http.Client
 	baseURL string
-}
-
-type OllamaModel struct {
-	Name       string    `json:"name"`
-	Model      string    `json:"model"`
-	ModifiedAt time.Time `json:"modified_at"`
-	Size       int64     `json:"size"`
-	Digest     string    `json:"digest"`
-	Details    struct {
-		Parent            string   `json:"parent"`
-		Format            string   `json:"format"`
-		Family            string   `json:"family"`
-		Families          []string `json:"families"`
-		ParameterSize     string   `json:"parameter_size"`
-		QuantizationLevel string   `json:"quantization_level"`
-	} `json:"details"`
-}
-
-type OllamaListResponse struct {
-	Models []OllamaModel `json:"models"`
 }
 
 func NewOllamaService() *OllamaService {
@@ -44,46 +25,6 @@ func NewOllamaService() *OllamaService {
 		},
 		baseURL: "http://localhost:11434", // Default Ollama URL
 	}
-}
-
-func (s *OllamaService) LoadModel(modelName string) error {
-	log.Printf("🔄 Testing model availability in Ollama: %s", modelName)
-
-	// Clean model name
-	cleanName := strings.Split(modelName, ":")[0]
-
-	// Test if model is available with a simple generation request
-	reqBody := map[string]interface{}{
-		"model":  modelName,
-		"prompt": "test",
-		"stream": false,
-		"options": map[string]interface{}{
-			"num_predict": 1, // Only generate 1 token for testing
-		},
-	}
-
-	jsonBody, err := json.Marshal(reqBody)
-	if err != nil {
-		return fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	resp, err := s.client.Post(s.baseURL+"/api/generate", "application/json", bytes.NewReader(jsonBody))
-	if err != nil {
-		return fmt.Errorf("failed to connect to Ollama: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		// Try without :latest tag
-		if strings.HasSuffix(modelName, ":latest") {
-			return s.LoadModel(cleanName)
-		}
-
-		return fmt.Errorf("model not available in Ollama: %s (HTTP %d)", modelName, resp.StatusCode)
-	}
-
-	log.Printf("✅ Model is available and responding: %s", modelName)
-	return nil
 }
 
 func (s *OllamaService) ListModels() ([]*types.Model, error) {
@@ -198,17 +139,44 @@ func (s *OllamaService) getFallbackModels() []*types.Model {
 	}
 }
 
-func (s *OllamaService) formatBytes(bytes int64) string {
-	const unit = 1024
-	if bytes < unit {
-		return fmt.Sprintf("%d B", bytes)
+func (s *OllamaService) LoadModel(modelName string) error {
+	log.Printf("🔄 Testing model availability in Ollama: %s", modelName)
+
+	// Clean model name
+	cleanName := strings.Split(modelName, ":")[0]
+
+	// Test if model is available with a simple generation request
+	reqBody := map[string]interface{}{
+		"model":  modelName,
+		"prompt": "test",
+		"stream": false,
+		"options": map[string]interface{}{
+			"num_predict": 1, // Only generate 1 token for testing
+		},
 	}
-	div, exp := int64(unit), 0
-	for n := bytes / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
+
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %w", err)
 	}
-	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+
+	resp, err := s.client.Post(s.baseURL+"/api/generate", "application/json", bytes.NewReader(jsonBody))
+	if err != nil {
+		return fmt.Errorf("failed to connect to Ollama: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		// Try without :latest tag
+		if strings.HasSuffix(modelName, ":latest") {
+			return s.LoadModel(cleanName)
+		}
+
+		return fmt.Errorf("model not available in Ollama: %s (HTTP %d)", modelName, resp.StatusCode)
+	}
+
+	log.Printf("✅ Model is available and responding: %s", modelName)
+	return nil
 }
 
 func (s *OllamaService) GenerateText(prompt, modelName string) (string, error) {
@@ -249,17 +217,20 @@ func (s *OllamaService) GenerateText(prompt, modelName string) (string, error) {
 	return response.Response, nil
 }
 
-// CreateModel creates a new model entry (placeholder for basic models)
-func (o *OllamaService) CreateModel(model *types.Model) error {
+func (s *OllamaService) CreateModel(model *types.Model) error {
 	// For now, just return nil as Ollama manages its own models
 	return nil
 }
 
-func (s *OllamaService) IsAvailable() bool {
-	resp, err := s.client.Get(s.baseURL + "/api/tags")
-	if err != nil {
-		return false
+func (s *OllamaService) formatBytes(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
 	}
-	defer resp.Body.Close()
-	return resp.StatusCode == http.StatusOK
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }

@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -15,15 +14,7 @@ import (
 	"github.com/1DeliDolu/ki-ai-go/pkg/types"
 )
 
-type AIService struct {
-	config        *config.Config
-	client        *http.Client
-	modelName     string
-	currentModel  string // Added missing field
-	isModelLoaded bool
-	ollamaService *OllamaService // Added missing field
-}
-
+// Request/Response structs for Ollama API
 type OllamaGenerateRequest struct {
 	Model   string                 `json:"model"`
 	Prompt  string                 `json:"prompt"`
@@ -34,10 +25,20 @@ type OllamaGenerateRequest struct {
 type OllamaGenerateResponse struct {
 	Response string `json:"response"`
 	Done     bool   `json:"done"`
+	Model    string `json:"model,omitempty"`
 }
 
 type OllamaPullRequest struct {
 	Name string `json:"name"`
+}
+
+type AIService struct {
+	config        *config.Config
+	client        *http.Client
+	modelName     string
+	currentModel  string
+	isModelLoaded bool
+	ollamaService *OllamaService
 }
 
 func NewAIService(cfg *config.Config) *AIService {
@@ -50,179 +51,8 @@ func NewAIService(cfg *config.Config) *AIService {
 	}
 }
 
-func (s *AIService) LoadModel(modelName string) error {
-	log.Printf("🔄 Loading model in AI service: %s", modelName)
-
-	// Clean model name
-	cleanModelName := strings.Split(modelName, ":")[0]
-
-	// Try to load with different name variations
-	modelVariations := []string{
-		cleanModelName,
-		modelName,
-		cleanModelName + ":latest",
-	}
-
-	var lastError error
-	for _, variation := range modelVariations {
-		log.Printf("🔄 AI Service trying: %s", variation)
-
-		// Test if the model works with a simple generation
-		if err := s.testModelGeneration(variation); err != nil {
-			log.Printf("⚠️ Model test failed for %s: %v", variation, err)
-			lastError = err
-			continue
-		}
-
-		// Success!
-		s.modelName = variation
-		s.currentModel = variation
-		s.isModelLoaded = true
-		log.Printf("✅ AI Service successfully loaded: %s", variation)
-		return nil
-	}
-
-	return fmt.Errorf("failed to load model in AI service: %w", lastError)
-}
-
-// testModelGeneration tests if a model can generate text
-func (s *AIService) testModelGeneration(modelName string) error {
-	log.Printf("🧪 Testing model generation: %s", modelName)
-
-	response, err := s.generateWithOllama("Hi", modelName)
-	if err != nil {
-		return fmt.Errorf("generation test failed: %w", err)
-	}
-
-	if strings.TrimSpace(response) == "" {
-		return fmt.Errorf("model returned empty response")
-	}
-
-	log.Printf("✅ Model generation test passed: %s", modelName)
-	return nil
-}
-
-func (s *AIService) createOllamaModelfile(modelName, modelPath string) error {
-	// Create a simple Ollama modelfile for the GGUF model
-	modelfile := fmt.Sprintf(`FROM %s
-
-TEMPLATE """{{ if .System }}<|system|>
-{{ .System }}<|end|>
-{{ end }}{{ if .Prompt }}<|user|>
-{{ .Prompt }}<|end|>
-{{ end }}<|assistant|>
-{{ .Response }}<|end|>
-"""
-
-PARAMETER stop "<|end|>"
-PARAMETER stop "<|user|>"
-PARAMETER stop "<|system|>"
-PARAMETER temperature 0.7
-PARAMETER top_p 0.9
-PARAMETER top_k 40
-`, modelPath)
-
-	// Create Ollama model using the API
-	reqBody := map[string]interface{}{
-		"name":      modelName,
-		"modelfile": modelfile,
-	}
-
-	jsonBody, err := json.Marshal(reqBody)
-	if err != nil {
-		return fmt.Errorf("failed to marshal create request: %w", err)
-	}
-
-	resp, err := s.client.Post(s.config.OllamaURL+"/api/create", "application/json", bytes.NewReader(jsonBody))
-	if err != nil {
-		return fmt.Errorf("failed to connect to Ollama: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to create Ollama model: HTTP %d", resp.StatusCode)
-	}
-
-	return nil
-}
-
-func (s *AIService) pullModelFromOllama(modelName string) error {
-	log.Printf("Pulling model from Ollama: %s", modelName)
-
-	reqBody := OllamaPullRequest{
-		Name: modelName,
-	}
-
-	jsonBody, err := json.Marshal(reqBody)
-	if err != nil {
-		return fmt.Errorf("failed to marshal pull request: %w", err)
-	}
-
-	resp, err := s.client.Post(s.config.OllamaURL+"/api/pull", "application/json", bytes.NewReader(jsonBody))
-	if err != nil {
-		return fmt.Errorf("failed to connect to Ollama at %s: %w", s.config.OllamaURL, err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to pull model from Ollama: HTTP %d", resp.StatusCode)
-	}
-
-	s.modelName = modelName
-	s.isModelLoaded = true
-	return nil
-}
-
-func (s *AIService) testModelWithOllama(modelName string) error {
-	// Test with a simple prompt
-	_, err := s.generateWithOllama("test", modelName)
-	return err
-}
-
-func (s *AIService) findModelFile(modelName string) string {
-	// Try exact match first
-	exactPath := filepath.Join(s.config.ModelsPath, modelName)
-	if _, err := os.Stat(exactPath); err == nil {
-		return exactPath
-	}
-
-	// Common model file extensions
-	extensions := []string{".gguf", ".bin", ".ggml"}
-
-	for _, ext := range extensions {
-		// Try with extension
-		path := filepath.Join(s.config.ModelsPath, modelName+ext)
-		if _, err := os.Stat(path); err == nil {
-			return path
-		}
-	}
-
-	// Search for any file containing the model name (case insensitive)
-	files, err := os.ReadDir(s.config.ModelsPath)
-	if err != nil {
-		return ""
-	}
-
-	// Try exact filename match first
-	for _, file := range files {
-		if !file.IsDir() && strings.EqualFold(file.Name(), modelName) {
-			return filepath.Join(s.config.ModelsPath, file.Name())
-		}
-	}
-
-	// Try partial match
-	for _, file := range files {
-		if !file.IsDir() && strings.Contains(strings.ToLower(file.Name()), strings.ToLower(modelName)) {
-			return filepath.Join(s.config.ModelsPath, file.Name())
-		}
-	}
-
-	return ""
-}
-
+// generateWithOllama - added missing method
 func (s *AIService) generateWithOllama(prompt, modelName string) (string, error) {
-	log.Printf("🔄 Generating with Ollama: %s", modelName)
-
 	reqBody := OllamaGenerateRequest{
 		Model:  modelName,
 		Prompt: prompt,
@@ -231,7 +61,6 @@ func (s *AIService) generateWithOllama(prompt, modelName string) (string, error)
 			"temperature": 0.7,
 			"top_p":       0.9,
 			"top_k":       40,
-			"num_predict": 50, // Limit tokens for faster response
 		},
 	}
 
@@ -256,6 +85,48 @@ func (s *AIService) generateWithOllama(prompt, modelName string) (string, error)
 	}
 
 	return response.Response, nil
+}
+
+func (s *AIService) LoadModel(modelName string) error {
+	log.Printf("Loading model: %s", modelName)
+
+	// Clean model name - remove any existing tags
+	cleanModelName := strings.Split(modelName, ":")[0]
+
+	// Try different model name variations
+	modelVariations := []string{
+		cleanModelName,
+		cleanModelName + ":latest",
+		modelName, // original name as fallback
+	}
+
+	var lastError error
+
+	for _, variation := range modelVariations {
+		log.Printf("🔄 Trying model variation: %s", variation)
+
+		// Test if the model works with Ollama
+		if err := s.testModelWithOllama(variation); err != nil {
+			log.Printf("⚠️ Model test failed for %s: %v", variation, err)
+			lastError = err
+			continue
+		}
+
+		// Success!
+		s.modelName = variation
+		s.currentModel = variation // Set both fields
+		s.isModelLoaded = true
+		log.Printf("✅ Successfully loaded model: %s", variation)
+		return nil
+	}
+
+	return fmt.Errorf("failed to load model: %w", lastError)
+}
+
+func (s *AIService) testModelWithOllama(modelName string) error {
+	// Test with a simple prompt
+	_, err := s.generateWithOllama("test", modelName)
+	return err
 }
 
 func (s *AIService) GenerateResponse(query string, documents []types.Document, wikiResults []types.WikiResult) (string, error) {

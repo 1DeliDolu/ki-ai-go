@@ -619,29 +619,6 @@ func (s *ModelService) isModelFile(filename string) bool {
 	return false
 }
 
-// checkModelExists verifies if a model exists in Ollama
-func (s *ModelService) checkModelExists(modelName string) error {
-	models, err := s.ollamaService.ListModels()
-	if err != nil {
-		return fmt.Errorf("failed to list Ollama models: %w", err)
-	}
-
-	for _, model := range models {
-		if model.Name == modelName || model.ID == modelName {
-			return nil
-		}
-		// Also check without :latest tag
-		if strings.HasSuffix(modelName, ":latest") {
-			baseModelName := strings.TrimSuffix(modelName, ":latest")
-			if model.Name == baseModelName || model.ID == baseModelName {
-				return nil
-			}
-		}
-	}
-
-	return fmt.Errorf("model not found: %s", modelName)
-}
-
 // pullAndLoadModel attempts to pull and then load a model
 func (s *ModelService) pullAndLoadModel(modelName string) error {
 	log.Printf("🔄 Pulling model from Ollama registry: %s", modelName)
@@ -693,4 +670,27 @@ func (s *ModelService) tryPullModel(modelName string) error {
 
 	log.Printf("✅ Successfully pulled model: %s", modelName)
 	return nil
+}
+
+// checkModelExists verifies if a model exists in Ollama
+func (s *ModelService) checkModelExists(modelName string) error {
+	models, err := s.ollamaService.ListModels()
+	if err != nil {
+		return fmt.Errorf("failed to list Ollama models: %w", err)
+	}
+
+	for _, model := range models {
+		if model.Name == modelName || model.ID == modelName {
+			return nil
+		}
+		// Also check without :latest tag
+		if strings.HasSuffix(modelName, ":latest") {
+			baseModelName := strings.TrimSuffix(modelName, ":latest")
+			if model.Name == baseModelName || model.ID == baseModelName {
+				return nil
+			}
+		}
+	}
+
+	return fmt.Errorf("model not found: %s", modelName)
 }
