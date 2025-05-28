@@ -19,7 +19,9 @@ type AIService struct {
 	config        *config.Config
 	client        *http.Client
 	modelName     string
+	currentModel  string // Added missing field
 	isModelLoaded bool
+	ollamaService *OllamaService // Added missing field
 }
 
 type OllamaGenerateRequest struct {
@@ -44,34 +46,59 @@ func NewAIService(cfg *config.Config) *AIService {
 		client: &http.Client{
 			Timeout: 120 * time.Second, // 2 minutes timeout for AI responses
 		},
+		ollamaService: NewOllamaService(), // Initialize ollama service
 	}
 }
 
 func (s *AIService) LoadModel(modelName string) error {
-	log.Printf("Loading model: %s", modelName)
+	log.Printf("🔄 Loading model in AI service: %s", modelName)
 
-	// First check if model file exists locally
-	modelPath := s.findModelFile(modelName)
-	if modelPath == "" {
-		// If no local file, try to pull from Ollama registry
-		return s.pullModelFromOllama(modelName)
+	// Clean model name
+	cleanModelName := strings.Split(modelName, ":")[0]
+
+	// Try to load with different name variations
+	modelVariations := []string{
+		cleanModelName,
+		modelName,
+		cleanModelName + ":latest",
 	}
 
-	log.Printf("Found local model file: %s", modelPath)
+	var lastError error
+	for _, variation := range modelVariations {
+		log.Printf("🔄 AI Service trying: %s", variation)
 
-	// For local GGUF files, we need to create Ollama modelfile
-	if err := s.createOllamaModelfile(modelName, modelPath); err != nil {
-		return fmt.Errorf("failed to create Ollama modelfile: %w", err)
+		// Test if the model works with a simple generation
+		if err := s.testModelGeneration(variation); err != nil {
+			log.Printf("⚠️ Model test failed for %s: %v", variation, err)
+			lastError = err
+			continue
+		}
+
+		// Success!
+		s.modelName = variation
+		s.currentModel = variation
+		s.isModelLoaded = true
+		log.Printf("✅ AI Service successfully loaded: %s", variation)
+		return nil
 	}
 
-	// Test if the model works with Ollama
-	if err := s.testModelWithOllama(modelName); err != nil {
-		return fmt.Errorf("model loaded but not responding: %w", err)
+	return fmt.Errorf("failed to load model in AI service: %w", lastError)
+}
+
+// testModelGeneration tests if a model can generate text
+func (s *AIService) testModelGeneration(modelName string) error {
+	log.Printf("🧪 Testing model generation: %s", modelName)
+
+	response, err := s.generateWithOllama("Hi", modelName)
+	if err != nil {
+		return fmt.Errorf("generation test failed: %w", err)
 	}
 
-	s.modelName = modelName
-	s.isModelLoaded = true
-	log.Printf("Successfully loaded model: %s", modelName)
+	if strings.TrimSpace(response) == "" {
+		return fmt.Errorf("model returned empty response")
+	}
+
+	log.Printf("✅ Model generation test passed: %s", modelName)
 	return nil
 }
 
@@ -193,65 +220,18 @@ func (s *AIService) findModelFile(modelName string) string {
 	return ""
 }
 
-func (s *AIService) GenerateResponse(query string, documents []types.Document, wikiResults []types.WikiResult) (string, error) {
-	if !s.isModelLoaded {
-		return "", fmt.Errorf("no model loaded. Please load a model first")
-	}
-
-	// Build context from documents and wiki results
-	var context strings.Builder
-
-	// Add document context
-	if len(documents) > 0 {
-		context.WriteString("Relevant documents:\n")
-		for _, doc := range documents {
-			context.WriteString(fmt.Sprintf("- %s (Type: %s)\n", doc.Name, doc.Type))
-		}
-		context.WriteString("\n")
-	}
-
-	// Add wiki context
-	if len(wikiResults) > 0 {
-		context.WriteString("Wikipedia information:\n")
-		for _, wiki := range wikiResults {
-			if wiki.Extract != "" {
-				context.WriteString(fmt.Sprintf("- %s: %s\n", wiki.Title, wiki.Extract))
-			} else if wiki.Description != "" {
-				context.WriteString(fmt.Sprintf("- %s: %s\n", wiki.Title, wiki.Description))
-			}
-		}
-		context.WriteString("\n")
-	}
-
-	// Create the prompt with context
-	var prompt string
-	if context.Len() > 0 {
-		prompt = fmt.Sprintf(`Based on the following context, please answer the question clearly and concisely.
-
-Context:
-%s
-
-Question: %s
-
-Answer:`, context.String(), query)
-	} else {
-		prompt = fmt.Sprintf("Please answer the following question clearly and concisely:\n\nQuestion: %s\n\nAnswer:", query)
-	}
-
-	return s.generateWithOllama(prompt, s.modelName)
-}
-
 func (s *AIService) generateWithOllama(prompt, modelName string) (string, error) {
+	log.Printf("🔄 Generating with Ollama: %s", modelName)
+
 	reqBody := OllamaGenerateRequest{
 		Model:  modelName,
 		Prompt: prompt,
 		Stream: false,
 		Options: map[string]interface{}{
-			"temperature":    0.7,
-			"top_p":          0.9,
-			"top_k":          40,
-			"num_predict":    512,
-			"repeat_penalty": 1.1,
+			"temperature": 0.7,
+			"top_p":       0.9,
+			"top_k":       40,
+			"num_predict": 50, // Limit tokens for faster response
 		},
 	}
 
@@ -267,7 +247,7 @@ func (s *AIService) generateWithOllama(prompt, modelName string) (string, error)
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("ollama API error: HTTP %d", resp.StatusCode)
+		return "", fmt.Errorf("Ollama API error: HTTP %d", resp.StatusCode)
 	}
 
 	var response OllamaGenerateResponse
@@ -275,16 +255,92 @@ func (s *AIService) generateWithOllama(prompt, modelName string) (string, error)
 		return "", fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	// Clean up the response
-	result := strings.TrimSpace(response.Response)
-	if result == "" {
-		return "I apologize, but I couldn't generate a proper response. Please try rephrasing your question.", nil
+	return response.Response, nil
+}
+
+func (s *AIService) GenerateResponse(query string, documents []types.Document, wikiResults []types.WikiResult) (string, error) {
+	log.Printf("🤖 Generating AI response for query: %s", query)
+
+	// Build context from documents with ACTUAL CONTENT
+	var context strings.Builder
+	context.WriteString("Context from uploaded documents:\n\n")
+
+	for _, doc := range documents {
+		// Get actual document content, not just metadata
+		if doc.Path != "" {
+			// Read file content directly
+			if content, err := os.ReadFile(doc.Path); err == nil {
+				context.WriteString(fmt.Sprintf("=== Document: %s ===\n", doc.Name))
+				context.WriteString(string(content))
+				context.WriteString("\n\n")
+				log.Printf("📄 Added content from %s (%d bytes)", doc.Name, len(content))
+			} else {
+				context.WriteString(fmt.Sprintf("=== Document: %s ===\n", doc.Name))
+				context.WriteString("(Content could not be read)\n\n")
+				log.Printf("❌ Could not read content from %s: %v", doc.Name, err)
+			}
+		} else {
+			context.WriteString(fmt.Sprintf("=== Document: %s ===\n", doc.Name))
+			context.WriteString("(No file path available)\n\n")
+		}
 	}
 
-	return result, nil
+	// Add wiki context - fix Summary field issue
+	if len(wikiResults) > 0 {
+		context.WriteString("Additional context from Wikipedia:\n\n")
+		for _, wiki := range wikiResults {
+			// Use Description instead of Summary if Summary doesn't exist
+			summary := wiki.Description
+			if summary == "" {
+				summary = "No description available"
+			}
+			context.WriteString(fmt.Sprintf("- %s: %s\n", wiki.Title, summary))
+		}
+		context.WriteString("\n")
+	}
+
+	// Enhanced prompt with document content
+	prompt := fmt.Sprintf(`Based on the following documents and context, please answer this question: %s
+
+%s
+
+Please provide a detailed answer based on the content above. If the answer is found in the documents, reference which document contains the information.`,
+		query, context.String())
+
+	// Generate response using the current model
+	if s.currentModel == "" {
+		return "Please load a model first to generate responses.", nil
+	}
+
+	// Use generateWithOllama method
+	response, err := s.generateWithOllama(prompt, s.currentModel)
+	if err != nil {
+		log.Printf("❌ Error generating response: %v", err)
+
+		// Fallback: Provide basic response with document content
+		if len(documents) > 0 {
+			fallback := fmt.Sprintf("I found %d document(s) related to your query:\n\n", len(documents))
+			for _, doc := range documents {
+				if doc.Path != "" {
+					if content, err := os.ReadFile(doc.Path); err == nil {
+						fallback += fmt.Sprintf("**%s:**\n%s\n\n", doc.Name, string(content))
+					}
+				}
+			}
+			return fallback, nil
+		}
+
+		return fmt.Errorf("failed to generate AI response: %w", err).Error(), nil
+	}
+
+	log.Printf("✅ Generated AI response (%d characters)", len(response))
+	return response, nil
 }
 
 func (s *AIService) GetCurrentModel() string {
+	if s.currentModel != "" {
+		return s.currentModel
+	}
 	return s.modelName
 }
 

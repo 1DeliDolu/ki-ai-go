@@ -15,6 +15,7 @@ type WikiResult struct {
 	Extract        string  `json:"extract,omitempty"`
 	Thumbnail      string  `json:"thumbnail,omitempty"`
 	RelevanceScore float64 `json:"relevanceScore,omitempty"`
+	Summary        string  `json:"summary"` // Added missing field
 }
 
 // Document represents a document in the system

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -377,12 +378,39 @@ func (h *Handler) Query(c *gin.Context) {
 		return
 	}
 
-	// Search documents if requested
+	// Search documents if requested - ENHANCED TO GET ACTUAL CONTENT
 	var documents []types.Document
 	if req.IncludeDocuments {
 		docs, err := h.documentService.SearchDocuments(req.Query)
 		if err == nil {
+			// Enhance documents with actual content access
+			for i := range docs {
+				// Ensure document has proper path for content reading
+				if docs[i].Path == "" {
+					// Try to get document with path from database
+					if fullDoc, err := h.documentService.GetDocument(docs[i].ID); err == nil {
+						docs[i].Path = fullDoc.Path
+					}
+				}
+			}
 			documents = docs
+			log.Printf("📄 Found %d documents for AI context", len(documents))
+		} else {
+			log.Printf("⚠️ Error searching documents: %v", err)
+		}
+	}
+
+	// If no specific search was done, include demo.txt if it exists
+	if len(documents) == 0 && req.IncludeDocuments {
+		log.Println("🔍 No documents found via search, checking for demo.txt...")
+		allDocs, err := h.documentService.ListDocuments()
+		if err == nil {
+			for _, doc := range allDocs {
+				if strings.Contains(strings.ToLower(doc.Name), "demo") {
+					documents = append(documents, doc)
+					log.Printf("📄 Added demo document: %s", doc.Name)
+				}
+			}
 		}
 	}
 
@@ -395,7 +423,7 @@ func (h *Handler) Query(c *gin.Context) {
 		}
 	}
 
-	// Generate AI response
+	// Generate AI response with enhanced context
 	response, err := h.aiService.GenerateResponse(req.Query, documents, wikiResults)
 	if err != nil {
 		log.Printf("Error generating AI response: %v", err)
@@ -413,7 +441,7 @@ func (h *Handler) Query(c *gin.Context) {
 	result.Sources.Documents = documents
 	result.Sources.Wiki = wikiResults
 
-	log.Printf("Query processed successfully in %.2f seconds", processingTime)
+	log.Printf("Query processed successfully in %.2f seconds with %d documents", processingTime, len(documents))
 	c.JSON(http.StatusOK, result)
 }
 
@@ -626,6 +654,51 @@ func (h *Handler) GetTestDocuments(c *gin.Context) {
 	})
 }
 
+// TestDocumentContent endpoint for debugging
+func (h *Handler) TestDocumentContent(c *gin.Context) {
+	log.Printf("TestDocumentContent requested from %s", c.ClientIP())
+
+	documents, err := h.documentService.ListDocuments()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	var testResults []map[string]interface{}
+
+	for _, doc := range documents {
+		result := map[string]interface{}{
+			"name": doc.Name,
+			"id":   doc.ID,
+			"path": doc.Path,
+			"size": doc.Size,
+		}
+
+		// Try to read actual content
+		if doc.Path != "" {
+			if content, err := os.ReadFile(doc.Path); err == nil {
+				result["content_preview"] = string(content)[:min(200, len(content))]
+				result["content_length"] = len(content)
+				result["can_read"] = true
+			} else {
+				result["can_read"] = false
+				result["read_error"] = err.Error()
+			}
+		} else {
+			result["can_read"] = false
+			result["read_error"] = "No file path"
+		}
+
+		testResults = append(testResults, result)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"documents":    testResults,
+		"total_count":  len(testResults),
+		"test_purpose": "Debug document content access",
+	})
+}
+
 // CleanupTestDocuments cleans only test documents
 func (h *Handler) CleanupTestDocuments(c *gin.Context) {
 	log.Printf("CleanupTestDocuments requested from %s", c.ClientIP())
@@ -640,4 +713,11 @@ func (h *Handler) CleanupTestDocuments(c *gin.Context) {
 		"message": "Test documents cleaned up successfully",
 		"path":    "test_documents",
 	})
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

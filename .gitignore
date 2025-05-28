@@ -209,3 +209,5 @@ weights/
 *.weights
 *.ckpt
 *.pth.tar
+
+test_documents/

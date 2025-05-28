@@ -319,8 +319,7 @@ func (s *DocumentService) CleanupTestDocuments() error {
 }
 
 func (s *DocumentService) SearchDocuments(query string) ([]types.Document, error) {
-	// Simple text search in content
-	log.Printf("Searching documents for query: '%s'", query)
+	log.Printf("🔍 Searching documents for query: '%s'", query)
 
 	// Get all documents from memory database
 	docs, err := s.memDB.ListDocuments()
@@ -331,19 +330,36 @@ func (s *DocumentService) SearchDocuments(query string) ([]types.Document, error
 	// Filter documents based on search query
 	var matchedDocs []*types.Document
 	for _, doc := range docs {
+		matched := false
+
 		// Search in document name (case-insensitive)
 		if containsIgnoreCase(doc.Name, query) {
-			matchedDocs = append(matchedDocs, doc)
-			continue
+			matched = true
 		}
 
 		// Search in document type
 		if containsIgnoreCase(doc.Type, query) {
-			matchedDocs = append(matchedDocs, doc)
-			continue
+			matched = true
 		}
 
-		// TODO: Add content search when we implement text extraction
+		// Search in actual file content if query is specific
+		if !matched && doc.Path != "" {
+			if content, err := os.ReadFile(doc.Path); err == nil {
+				if containsIgnoreCase(string(content), query) {
+					matched = true
+					log.Printf("📄 Content match found in %s", doc.Name)
+				}
+			}
+		}
+
+		// If no specific query, include all documents (for demo.txt case)
+		if query == "" || strings.TrimSpace(query) == "" {
+			matched = true
+		}
+
+		if matched {
+			matchedDocs = append(matchedDocs, doc)
+		}
 	}
 
 	// Convert pointers to values
@@ -352,7 +368,7 @@ func (s *DocumentService) SearchDocuments(query string) ([]types.Document, error
 		result[i] = *doc
 	}
 
-	log.Printf("Found %d documents matching query '%s'", len(result), query)
+	log.Printf("✅ Found %d documents matching query '%s'", len(result), query)
 	return result, nil
 }
 

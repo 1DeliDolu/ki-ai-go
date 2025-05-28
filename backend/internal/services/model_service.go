@@ -2,7 +2,9 @@
 package services
 
 import (
+	"bytes"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -43,13 +45,50 @@ func (s *ModelService) ListModels() ([]*types.Model, error) {
 }
 
 func (s *ModelService) LoadModel(modelName string) error {
-	// Use Ollama service to load the model
-	err := s.ollamaService.LoadModel(modelName + ":latest")
-	if err != nil {
-		return fmt.Errorf("failed to load model %s: %w", modelName, err)
+	log.Printf("🔄 Loading model: %s", modelName)
+
+	// Clean model name - remove any existing tags
+	cleanModelName := strings.Split(modelName, ":")[0]
+
+	// Try different model name variations
+	modelVariations := []string{
+		cleanModelName,
+		cleanModelName + ":latest",
+		modelName, // original name as fallback
 	}
 
-	s.currentModel = modelName
+	var lastError error
+
+	for _, variation := range modelVariations {
+		log.Printf("🔄 Trying model variation: %s", variation)
+
+		// Check if model exists in Ollama first
+		if err := s.checkModelExists(variation); err != nil {
+			log.Printf("⚠️ Model %s not found in Ollama: %v", variation, err)
+			lastError = err
+			continue
+		}
+
+		// Try to load the model
+		if err := s.ollamaService.LoadModel(variation); err != nil {
+			log.Printf("⚠️ Failed to load model %s: %v", variation, err)
+			lastError = err
+			continue
+		}
+
+		// Success!
+		s.currentModel = variation
+		log.Printf("✅ Successfully loaded model: %s", variation)
+		return nil
+	}
+
+	// If all variations failed, try to pull the model
+	log.Printf("🔄 Model not found locally, attempting to pull: %s", cleanModelName)
+	if err := s.pullAndLoadModel(cleanModelName); err != nil {
+		return fmt.Errorf("failed to load or pull model %s: %w (last error: %v)", modelName, err, lastError)
+	}
+
+	s.currentModel = cleanModelName
 	return nil
 }
 
@@ -578,4 +617,80 @@ func (s *ModelService) isModelFile(filename string) bool {
 		}
 	}
 	return false
+}
+
+// checkModelExists verifies if a model exists in Ollama
+func (s *ModelService) checkModelExists(modelName string) error {
+	models, err := s.ollamaService.ListModels()
+	if err != nil {
+		return fmt.Errorf("failed to list Ollama models: %w", err)
+	}
+
+	for _, model := range models {
+		if model.Name == modelName || model.ID == modelName {
+			return nil
+		}
+		// Also check without :latest tag
+		if strings.HasSuffix(modelName, ":latest") {
+			baseModelName := strings.TrimSuffix(modelName, ":latest")
+			if model.Name == baseModelName || model.ID == baseModelName {
+				return nil
+			}
+		}
+	}
+
+	return fmt.Errorf("model not found: %s", modelName)
+}
+
+// pullAndLoadModel attempts to pull and then load a model
+func (s *ModelService) pullAndLoadModel(modelName string) error {
+	log.Printf("🔄 Pulling model from Ollama registry: %s", modelName)
+
+	// Try common model names for phi2
+	if strings.Contains(strings.ToLower(modelName), "phi") {
+		// Try different phi model names
+		phiVariations := []string{
+			"phi",
+			"phi2",
+			"microsoft/phi-2",
+			"phi:latest",
+		}
+
+		for _, variation := range phiVariations {
+			log.Printf("🔄 Trying to pull phi model: %s", variation)
+			if err := s.tryPullModel(variation); err == nil {
+				return s.ollamaService.LoadModel(variation)
+			}
+		}
+	}
+
+	// Try to pull the original model name
+	return s.tryPullModel(modelName)
+}
+
+// tryPullModel attempts to pull a specific model
+func (s *ModelService) tryPullModel(modelName string) error {
+	// Create a pull request
+	reqBody := map[string]interface{}{
+		"name": modelName,
+	}
+
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal pull request: %w", err)
+	}
+
+	client := &http.Client{Timeout: 5 * time.Minute}
+	resp, err := client.Post(s.config.OllamaURL+"/api/pull", "application/json", bytes.NewReader(jsonBody))
+	if err != nil {
+		return fmt.Errorf("failed to connect to Ollama: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to pull model: HTTP %d", resp.StatusCode)
+	}
+
+	log.Printf("✅ Successfully pulled model: %s", modelName)
+	return nil
 }
