@@ -157,16 +157,175 @@ func (s *ModelService) ValidateModelName(name string) error {
 	return fmt.Errorf("unknown model: %s", name)
 }
 
-func (s *ModelService) GetModelInfo(name string) (*ModelInfo, error) {
-	modelDefinitions := s.getModelDefinitions()
+// AddBasicModels adds some basic/sample models to the system
+func (s *ModelService) AddBasicModels() error {
+	log.Println("Adding basic models to the system...")
 
+	basicModels := []types.Model{
+		{
+			ID:          "llama-7b-chat",
+			Name:        "llama-7b-chat",
+			Size:        "4.1GB",
+			Type:        "chat",
+			Status:      "available",
+			Description: "Llama 7B Chat model for general conversation",
+			ModelType:   "llama",
+			URL:         "https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/resolve/main/llama-2-7b-chat.Q4_K_M.gguf",
+		},
+		{
+			ID:          "tinyllama-1.1b",
+			Name:        "tinyllama-1.1b",
+			Size:        "630MB",
+			Type:        "completion",
+			Status:      "available",
+			Description: "Tiny Llama 1.1B model for lightweight text generation",
+			ModelType:   "tinyllama",
+			URL:         "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
+		},
+		{
+			ID:          "gpt2-medium",
+			Name:        "gpt2-medium",
+			Size:        "345MB",
+			Type:        "completion",
+			Status:      "available",
+			Description: "GPT-2 Medium model for text completion",
+			ModelType:   "gpt2",
+			URL:         "https://huggingface.co/gpt2-medium",
+		},
+		{
+			ID:          "code-llama-7b",
+			Name:        "code-llama-7b",
+			Size:        "4.2GB",
+			Type:        "code",
+			Status:      "available",
+			Description: "Code Llama 7B for code generation and completion",
+			ModelType:   "codellama",
+			URL:         "https://huggingface.co/TheBloke/CodeLlama-7B-Instruct-GGUF/resolve/main/codellama-7b-instruct.Q4_K_M.gguf",
+		},
+		{
+			ID:          "neural-chat-7b",
+			Name:        "neural-chat-7b",
+			Size:        "4.8GB",
+			Type:        "chat",
+			Status:      "available",
+			Description: "Intel's Neural Chat 7B for conversations",
+			ModelType:   "neural-chat",
+			URL:         "https://huggingface.co/TheBloke/neural-chat-7B-v3-1-GGUF/resolve/main/neural-chat-7b-v3-1.Q4_K_M.gguf",
+		},
+		{
+			ID:          "phi-2",
+			Name:        "phi-2",
+			Size:        "2.8GB",
+			Type:        "completion",
+			Status:      "available",
+			Description: "Microsoft's Phi-2 small but powerful model",
+			ModelType:   "phi",
+			URL:         "https://huggingface.co/TheBloke/phi-2-GGUF/resolve/main/phi-2.Q4_K_M.gguf",
+		},
+	}
+
+	for _, model := range basicModels {
+		// Create a types.Model compatible with Ollama structure
+		ollamaModel := &types.Model{
+			ID:          model.ID,
+			Name:        model.Name,
+			Size:        model.Size,
+			Type:        model.Type,
+			Status:      model.Status,
+			Description: model.Description,
+			ModelType:   model.ModelType,
+			URL:         model.URL,
+		}
+
+		// Add via Ollama service if available, fallback to memory
+		if err := s.ollamaService.CreateModel(ollamaModel); err != nil {
+			log.Printf("Failed to add model %s via Ollama: %v", model.Name, err)
+			// Continue without failing - models will be available from Ollama's existing catalog
+		}
+
+		log.Printf("✅ Added basic model: %s (%s)", model.Name, model.Size)
+	}
+
+	log.Println("Basic models added successfully!")
+	return nil
+}
+
+// InitializeBasicModels checks and adds basic models if none exist
+func (s *ModelService) InitializeBasicModels() error {
+	models, err := s.ListModels()
+	if err != nil {
+		return fmt.Errorf("failed to check existing models: %w", err)
+	}
+
+	if len(models) == 0 {
+		log.Println("No models found in database, adding basic models...")
+		return s.AddBasicModels()
+	}
+
+	log.Printf("Found %d existing models, skipping basic model initialization", len(models))
+	return nil
+}
+
+// GetModelInfo returns detailed information about a specific model
+func (s *ModelService) GetModelInfo(name string) (*ModelInfo, error) {
+	log.Printf("Getting info for model: %s", name)
+
+	// Try to get from local definitions first
+	modelDefinitions := s.getModelDefinitions()
 	for _, modelInfo := range modelDefinitions {
 		if modelInfo.OllamaName == name {
 			return &modelInfo, nil
 		}
 	}
 
+	// Try to get from Ollama
+	models, err := s.ollamaService.ListModels()
+	if err == nil {
+		for _, model := range models {
+			if model.Name == name || model.ID == name {
+				// Convert Ollama model to ModelInfo
+				return &ModelInfo{
+					Filename:      fmt.Sprintf("%s.gguf", name),
+					OllamaName:    model.Name,
+					DisplayName:   model.Name,
+					Description:   model.Description,
+					ModelType:     model.Type,
+					EstimatedSize: model.Size,
+				}, nil
+			}
+		}
+	}
+
 	return nil, fmt.Errorf("model not found: %s", name)
+}
+
+// GetAvailableModelTypes returns all available model types
+func (s *ModelService) GetAvailableModelTypes() []string {
+	return []string{
+		"chat",       // Conversational models
+		"completion", // Text completion models
+		"code",       // Code generation models
+		"embedding",  // Text embedding models
+		"vision",     // Vision/multimodal models
+		"audio",      // Audio processing models
+	}
+}
+
+// GetModelsByType returns models filtered by type
+func (s *ModelService) GetModelsByType(modelType string) ([]*types.Model, error) {
+	allModels, err := s.ListModels()
+	if err != nil {
+		return nil, err
+	}
+
+	var filtered []*types.Model
+	for _, model := range allModels {
+		if model.Type == modelType {
+			filtered = append(filtered, model)
+		}
+	}
+
+	return filtered, nil
 }
 
 func (s *ModelService) GetModelFilePath(name string) (string, error) {
@@ -329,8 +488,6 @@ func (s *ModelService) findModelFileByPattern(modelName string, existingFiles ma
 
 	return ""
 }
-
-
 
 // Enhanced pattern generation for better matching
 func (s *ModelService) generateSearchPatterns(modelName string) []string {

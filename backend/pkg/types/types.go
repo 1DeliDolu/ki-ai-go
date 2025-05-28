@@ -45,10 +45,12 @@ type Model struct {
 	ID               string  `json:"id"`
 	Name             string  `json:"name"`
 	Size             string  `json:"size"`
+	Type             string  `json:"type"` // Added missing field
 	Status           string  `json:"status"`
 	DownloadProgress float64 `json:"downloadProgress,omitempty"`
 	Description      string  `json:"description,omitempty"`
 	ModelType        string  `json:"modelType"`
+	URL              string  `json:"url,omitempty"` // Added for download links
 }
 
 // QueryRequest represents a query request

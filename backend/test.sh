@@ -34,6 +34,29 @@ curl -s http://localhost:8082/api/v1/documents/types | jq . 2>/dev/null || curl 
 echo ""
 
 echo ""
+echo "🤖 Testing models initialization..."
+echo "Response:"
+curl -s -X POST http://localhost:8082/api/v1/models/initialize | jq . 2>/dev/null || curl -s -X POST http://localhost:8082/api/v1/models/initialize
+
+echo ""
+echo "📋 Testing model types endpoint..."
+echo "Response:"
+curl -s http://localhost:8082/api/v1/models/types | jq . 2>/dev/null || curl -s http://localhost:8082/api/v1/models/types
+echo ""
+
+echo ""
+echo "🔍 Testing chat models..."
+echo "Response:"
+curl -s http://localhost:8082/api/v1/models/type/chat | jq . 2>/dev/null || curl -s http://localhost:8082/api/v1/models/type/chat
+echo ""
+
+echo ""
+echo "📄 Testing specific model info..."
+echo "Response:"
+curl -s http://localhost:8082/api/v1/models/tinyllama-1.1b | jq . 2>/dev/null || curl -s http://localhost:8082/api/v1/models/tinyllama-1.1b
+echo ""
+
+echo ""
 echo "✅ API tests completed!"
 echo ""
 echo "🌐 You can also test in browser:"

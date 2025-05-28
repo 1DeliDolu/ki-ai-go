@@ -127,6 +127,71 @@ func (h *Handler) DeleteModel(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Model deleted successfully"})
 }
 
+// InitializeBasicModels adds basic models to the system
+func (h *Handler) InitializeBasicModels(c *gin.Context) {
+	log.Printf("InitializeBasicModels requested from %s", c.ClientIP())
+
+	if err := h.modelService.AddBasicModels(); err != nil {
+		log.Printf("Error initializing basic models: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Basic models initialized successfully",
+	})
+}
+
+// GetModelInfo returns detailed information about a specific model
+func (h *Handler) GetModelInfo(c *gin.Context) {
+	modelName := c.Param("name")
+	if modelName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Model name is required"})
+		return
+	}
+
+	model, err := h.modelService.GetModelInfo(modelName)
+	if err != nil {
+		log.Printf("Error getting model info: %v", err)
+		c.JSON(http.StatusNotFound, gin.H{"error": "Model not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"model": model,
+	})
+}
+
+// GetAvailableModelTypes returns all available model types
+func (h *Handler) GetAvailableModelTypes(c *gin.Context) {
+	types := h.modelService.GetAvailableModelTypes()
+	c.JSON(http.StatusOK, gin.H{
+		"model_types": types,
+	})
+}
+
+// GetModelsByType returns models filtered by type
+func (h *Handler) GetModelsByType(c *gin.Context) {
+	modelType := c.Param("type")
+	if modelType == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Model type is required"})
+		return
+	}
+
+	models, err := h.modelService.GetModelsByType(modelType)
+	if err != nil {
+		log.Printf("Error getting models by type: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"models": models,
+		"type":   modelType,
+		"count":  len(models),
+	})
+}
+
 // Document handlers
 func (h *Handler) ListDocuments(c *gin.Context) {
 	log.Printf("ListDocuments requested from %s", c.ClientIP())

@@ -1,11 +1,14 @@
 package processors
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+	"encoding/xml"
 
 	"github.com/1DeliDolu/ki-ai-go/pkg/types"
 )
@@ -31,9 +34,12 @@ func NewDocumentManager() *DocumentManager {
 	dm.RegisterProcessor(&TXTProcessor{})
 	dm.RegisterProcessor(&MarkdownProcessor{})
 	dm.RegisterProcessor(&HTMLProcessor{})
-	// TODO: Add PDF and DOCX when dependencies are resolved
-	// dm.RegisterProcessor(&PDFProcessor{})
-	// dm.RegisterProcessor(&DOCXProcessor{})
+	
+	// Add advanced processors if dependencies are available
+	dm.RegisterProcessor(&PDFProcessor{})
+	dm.RegisterProcessor(&DOCXProcessor{})
+	dm.RegisterProcessor(&JSONProcessor{})
+	dm.RegisterProcessor(&XMLProcessor{})
 
 	return dm
 }
@@ -228,11 +234,37 @@ func (p *HTMLProcessor) GetSupportedTypes() []string {
 	return []string{"html", "htm"}
 }
 
-// FileTypeDetector helps detect file types (basic implementation)
-func DetectFileType(path string) (string, error) {
-	ext := strings.ToLower(filepath.Ext(path))
-	if strings.HasPrefix(ext, ".") {
-		return ext[1:], nil
+// PDFProcessor handles PDF files with fallback implementation
+type PDFProcessor struct{}
+
+func (p *PDFProcessor) Read(path string) (*types.DocumentContent, error) {
+	// Try to use a simple fallback for now
+	content, err := p.extractPDFContentBasic(path)
+	if err != nil {
+		return &types.DocumentContent{
+			Text:     "PDF content extraction not available - file detected but cannot read content",
+			Type:     "pdf",
+			Metadata: map[string]string{
+				"status": "extraction_failed",
+				"error":  err.Error(),
+			},
+			ProcessedAt: time.Now(),
+		}, nil
 	}
-	return ext, nil
+
+	stat, _ := os.Stat(path)
+	
+	return &types.DocumentContent{
+		Text:     content,
+		Type:     "pdf",
+		Metadata: map[string]string{
+			"file_size": fmt.Sprintf("%d", stat.Size()),
+			"status":    "basic_extraction",
+		},
+		ProcessedAt: time.Now(),
+	}, nil
 }
+
+func (p *PDFProcessor) extractPDFContentBasic(path string) (string, error) {
+	// Basic PDF content extraction placeholder
+	// In real implementation, this would use a PDF library

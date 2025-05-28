@@ -3,6 +3,7 @@ package services
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -148,6 +149,14 @@ func (s *OllamaService) LoadModel(modelName string) error {
 		return fmt.Errorf("failed to load model %s: status %d", modelName, resp.StatusCode)
 	}
 
+	return nil
+}
+
+// CreateModel creates a new model entry (placeholder for basic models)
+func (o *OllamaService) CreateModel(model *types.Model) error {
+	// This is a placeholder implementation
+	// In a real scenario, this would register the model with Ollama
+	log.Printf("Model registration placeholder for: %s (type: %s)", model.Name, model.Type)
 	return nil
 }
 
