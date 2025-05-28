@@ -1,0 +1,46 @@
+AI Models Download Links
+========================
+
+Save these files to: /mnt/d/Praxis/KI/lokaleKI/go_mustAI/local-ai-project/models/
+
+OpenChat 3.5 (Save as: openchat-3.5-1210.Q4_K_M.gguf)
+------------------------------------------------------
+https://huggingface.co/TheBloke/openchat_3.5-GGUF/resolve/main/openchat_3.5.q4_k_m.gguf
+
+Microsoft Phi-2 (Save as: phi-2.Q4_K_M.gguf)
+----------------------------------------------
+https://huggingface.co/TheBloke/phi-2-GGUF/resolve/main/phi-2.q4_k_m.gguf
+
+Llama 2 Chat (Save as: llama-2-7b-chat.Q4_K_M.gguf)
+----------------------------------------------------
+https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/resolve/main/llama-2-7b-chat.Q4_K_M.gguf
+
+Neural Chat (Save as: neural-chat-7b-v3-1.Q4_K_M.gguf)
+-------------------------------------------------------
+https://huggingface.co/TheBloke/neural-chat-7B-v3-1-GGUF/resolve/main/neural-chat-7b-v3-1.Q4_K_M.gguf
+
+Browser Download Pages
+======================
+OpenChat: https://huggingface.co/TheBloke/openchat_3.5-GGUF/tree/main
+Phi-2: https://huggingface.co/TheBloke/phi-2-GGUF/tree/main
+Llama 2: https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/tree/main
+Neural Chat: https://huggingface.co/TheBloke/neural-chat-7B-v3-1-GGUF/tree/main
+
+Manual Download Steps
+====================
+1. Right-click on the download link
+2. Select "Save link as..." or "Download linked file"
+3. Navigate to: /mnt/d/Praxis/KI/lokaleKI/go_mustAI/local-ai-project/models/
+4. Save with the exact filename specified above
+5. Wait for download to complete
+6. Restart your backend server
+
+Command Line Downloads (WSL)
+============================
+cd /mnt/d/Praxis/KI/lokaleKI/go_mustAI/local-ai-project/models/
+
+# OpenChat 3.5
+wget 'https://huggingface.co/TheBloke/openchat_3.5-GGUF/resolve/main/openchat_3.5.q4_k_m.gguf' -O openchat-3.5-1210.Q4_K_M.gguf
+
+# Phi-2
+wget 'https://huggingface.co/TheBloke/phi-2-GGUF/resolve/main/phi-2.q4_k_m.gguf' -O phi-2.Q4_K_M.gguf

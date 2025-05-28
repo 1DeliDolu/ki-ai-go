@@ -1,0 +1,211 @@
+# Model files - Large AI model files should not be in git
+*.gguf
+*.bin
+*.safetensors
+*.pt
+*.pth
+*.onnx
+*.tflite
+*.mlmodel
+*.h5
+*.pkl
+*.joblib
+models/
+*.model
+
+# Build artifacts and binaries
+bin/
+dist/
+build/
+*.exe
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+server
+local-ai-backend
+local-rag-system
+
+# Dependencies and package managers
+node_modules/
+vendor/
+.pnpm-store/
+yarn.lock
+package-lock.json
+go.sum
+Pipfile.lock
+poetry.lock
+
+# Development and IDE files
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+*.tmp
+*.temp
+
+# Logs and debug files
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+debug.log
+error.log
+
+# Environment and configuration
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.local
+config.local.*
+secrets.json
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+data/
+database/
+*.sql.backup
+
+# Cache and temporary directories
+.cache/
+tmp/
+temp/
+*.cache
+.npm/
+.yarn/
+.pnpm-cache/
+.eslintcache
+.parcel-cache/
+
+# Upload directories
+uploads/
+upload/
+files/
+documents/
+.local-ai-project/
+
+# Test coverage and reports
+coverage/
+*.cover
+.nyc_output/
+test-results/
+reports/
+
+# Backup files
+*.backup
+*.bak
+*.orig
+*~
+
+# Compressed files
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Windows specific
+$RECYCLE.BIN/
+*.lnk
+
+# Linux specific
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# macOS specific
+.AppleDouble
+.LSOverride
+Icon?
+.DocumentRevisions-V100
+.fseventsd
+.TemporaryItems
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Development artifacts
+*.pid
+*.seed
+*.pid.lock
+.nyc_output
+lib-cov
+coverage
+.grunt
+.lock-wscript
+.wafpickle-*
+.env.test
+
+# Runtime files
+*.sock
+*.lock
+.pids
+.pid
+
+# Documentation builds
+docs/_build/
+site/
+_site/
+
+# Large media files
+*.mp4
+*.avi
+*.mov
+*.wmv
+*.flv
+*.webm
+*.mp3
+*.wav
+*.ogg
+*.m4a
+*.aac
+*.flac
+
+# Data files that might be large
+*.csv
+*.json.gz
+*.xml.gz
+*.txt.gz
+data.json
+dataset/
+training_data/
+test_data/
+
+# AI/ML specific ignores
+checkpoints/
+runs/
+wandb/
+tensorboard/
+mlruns/
+.mlflow/
+experiments/
+saved_models/
+trained_models/
+weights/
+*.weights
+*.ckpt
+*.pth.tar
