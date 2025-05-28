@@ -2,11 +2,16 @@
 package handlers
 
 import (
+	"fmt"
 	"log"
 	"net/http"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/1DeliDolu/ki-ai-go/internal/services"
+	"github.com/1DeliDolu/ki-ai-go/internal/utils"
 	"github.com/1DeliDolu/ki-ai-go/pkg/types"
 	"github.com/gin-gonic/gin"
 )
@@ -420,4 +425,131 @@ func (h *Handler) CleanupDocuments(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Documents cleaned up successfully"})
+}
+
+// ConvertDocument converts a document to specified format
+func (h *Handler) ConvertDocument(c *gin.Context) {
+	documentID := c.Param("id")
+	if documentID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Document ID is required"})
+		return
+	}
+
+	var req struct {
+		Format     string `json:"format" binding:"required"`
+		OutputPath string `json:"output_path"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Generate output path if not provided
+	if req.OutputPath == "" {
+		doc, err := h.documentService.GetDocument(documentID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Document not found"})
+			return
+		}
+		basename := strings.TrimSuffix(doc.Name, filepath.Ext(doc.Name))
+		req.OutputPath = fmt.Sprintf("./converted/%s.%s", basename, req.Format)
+	}
+
+	err := h.documentService.ConvertDocument(documentID, req.Format, req.OutputPath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":     "Document converted successfully",
+		"output_path": req.OutputPath,
+		"format":      req.Format,
+	})
+}
+
+// SearchInDocument searches within a specific document
+func (h *Handler) SearchInDocument(c *gin.Context) {
+	documentID := c.Param("id")
+	query := c.Query("q")
+
+	if documentID == "" || query == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Document ID and query are required"})
+		return
+	}
+
+	matches, err := h.documentService.SearchInDocumentContent(documentID, query)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"query":       query,
+		"matches":     matches,
+		"match_count": len(matches),
+	})
+}
+
+// AdvancedSearch performs advanced search across documents
+func (h *Handler) AdvancedSearch(c *gin.Context) {
+	var req struct {
+		Query   string              `json:"query" binding:"required"`
+		Options utils.SearchOptions `json:"options"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Set default options
+	if req.Options.MaxMatches == 0 {
+		req.Options.MaxMatches = 100
+	}
+
+	results, err := h.documentService.AdvancedSearch(req.Query, req.Options)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Generate statistics
+	searcher := utils.NewDocumentSearcher()
+	stats := searcher.GetSearchStatistics(results)
+
+	c.JSON(http.StatusOK, gin.H{
+		"query":      req.Query,
+		"results":    results,
+		"statistics": stats,
+	})
+}
+
+// GetDocumentPreview returns a preview of document content
+func (h *Handler) GetDocumentPreview(c *gin.Context) {
+	documentID := c.Param("id")
+	if documentID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Document ID is required"})
+		return
+	}
+
+	maxLines := 50 // Default preview lines
+	if lines := c.Query("lines"); lines != "" {
+		if parsed, err := strconv.Atoi(lines); err == nil && parsed > 0 {
+			maxLines = parsed
+		}
+	}
+
+	preview, err := h.documentService.GetDocumentPreview(documentID, maxLines)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"document_id": documentID,
+		"preview":     preview,
+		"max_lines":   maxLines,
+	})
 }

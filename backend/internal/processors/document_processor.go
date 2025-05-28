@@ -736,3 +736,67 @@ func (p *CodeProcessor) detectLanguage(ext string) string {
 func (p *CodeProcessor) GetSupportedTypes() []string {
 	return []string{"go", "py", "js", "java", "c", "cpp", "cs", "php", "rb", "sh", "bash", "sql", "css"}
 }
+
+// SearchInDocument searches for text within a document
+func (dm *DocumentManager) SearchInDocument(path, query string) ([]string, error) {
+	log.Printf("🔍 Searching in document: %s for: %s", filepath.Base(path), query)
+
+	content, err := dm.ProcessDocument(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to process document: %w", err)
+	}
+
+	var matches []string
+	lines := strings.Split(content.Text, "\n")
+
+	for i, line := range lines {
+		if strings.Contains(strings.ToLower(line), strings.ToLower(query)) {
+			// Add context: line number and content
+			match := fmt.Sprintf("Line %d: %s", i+1, strings.TrimSpace(line))
+			matches = append(matches, match)
+		}
+	}
+
+	log.Printf("✅ Found %d matches in %s", len(matches), filepath.Base(path))
+	return matches, nil
+}
+
+// SearchInMultipleDocuments searches for text in multiple documents
+func (dm *DocumentManager) SearchInMultipleDocuments(paths []string, query string) (map[string][]string, error) {
+	log.Printf("🔍 Searching in %d documents for: %s", len(paths), query)
+
+	results := make(map[string][]string)
+
+	for _, path := range paths {
+		matches, err := dm.SearchInDocument(path, query)
+		if err != nil {
+			log.Printf("❌ Error searching %s: %v", filepath.Base(path), err)
+			continue
+		}
+
+		if len(matches) > 0 {
+			results[path] = matches
+		}
+	}
+
+	log.Printf("✅ Search completed. Found matches in %d out of %d documents", len(results), len(paths))
+	return results, nil
+}
+
+// GetDocumentPreview returns a preview of document content
+func (dm *DocumentManager) GetDocumentPreview(path string, maxLines int) (string, error) {
+	content, err := dm.ProcessDocument(path)
+	if err != nil {
+		return "", err
+	}
+
+	lines := strings.Split(content.Text, "\n")
+	if len(lines) <= maxLines {
+		return content.Text, nil
+	}
+
+	preview := strings.Join(lines[:maxLines], "\n")
+	preview += fmt.Sprintf("\n... (%d more lines)", len(lines)-maxLines)
+
+	return preview, nil
+}

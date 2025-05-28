@@ -13,6 +13,7 @@ import (
 	"github.com/1DeliDolu/ki-ai-go/internal/config"
 	"github.com/1DeliDolu/ki-ai-go/internal/processors"
 	"github.com/1DeliDolu/ki-ai-go/internal/storage"
+	"github.com/1DeliDolu/ki-ai-go/internal/utils"
 	"github.com/1DeliDolu/ki-ai-go/pkg/types"
 )
 
@@ -40,6 +41,68 @@ func NewDocumentService(db interface{}, cfg *config.Config) *DocumentService {
 		config:          cfg,
 		documentManager: processors.NewDocumentManager(),
 	}
+}
+
+// ConvertDocument converts a document to specified format
+func (s *DocumentService) ConvertDocument(documentID, format, outputPath string) error {
+	doc, err := s.memDB.GetDocument(documentID)
+	if err != nil {
+		return fmt.Errorf("document not found: %w", err)
+	}
+
+	converter := utils.NewDocumentConverter()
+
+	switch strings.ToLower(format) {
+	case "markdown", "md":
+		return converter.ConvertToMarkdown(doc.Path, outputPath)
+	case "html":
+		return converter.ConvertToHTML(doc.Path, outputPath)
+	case "txt", "text":
+		return converter.ConvertToPlainText(doc.Path, outputPath)
+	default:
+		return fmt.Errorf("unsupported format: %s", format)
+	}
+}
+
+// SearchInDocumentContent searches within a specific document
+func (s *DocumentService) SearchInDocumentContent(documentID, query string) ([]string, error) {
+	doc, err := s.memDB.GetDocument(documentID)
+	if err != nil {
+		return nil, fmt.Errorf("document not found: %w", err)
+	}
+
+	return s.documentManager.SearchInDocument(doc.Path, query)
+}
+
+// AdvancedSearch performs advanced search with options
+func (s *DocumentService) AdvancedSearch(query string, options utils.SearchOptions) (map[string]*utils.SearchResult, error) {
+	// Get all documents
+	docs, err := s.memDB.ListDocuments()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get documents: %w", err)
+	}
+
+	// Collect paths
+	var paths []string
+	for _, doc := range docs {
+		if doc.Path != "" {
+			paths = append(paths, doc.Path)
+		}
+	}
+
+	// Perform search
+	searcher := utils.NewDocumentSearcher()
+	return searcher.SearchInMultipleDocuments(paths, query, options)
+}
+
+// GetDocumentPreview returns a preview of document content
+func (s *DocumentService) GetDocumentPreview(documentID string, maxLines int) (string, error) {
+	doc, err := s.memDB.GetDocument(documentID)
+	if err != nil {
+		return "", fmt.Errorf("document not found: %w", err)
+	}
+
+	return s.documentManager.GetDocumentPreview(doc.Path, maxLines)
 }
 
 func (s *DocumentService) ListDocuments() ([]types.Document, error) {
