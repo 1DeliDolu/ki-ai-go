@@ -2,13 +2,13 @@ package processors
 
 import (
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
-	"encoding/xml"
 
 	"github.com/1DeliDolu/ki-ai-go/pkg/types"
 )
@@ -30,16 +30,19 @@ func NewDocumentManager() *DocumentManager {
 		processors: make(map[string]DocumentProcessor),
 	}
 
-	// Register working processors first
+	// Register basic processors
 	dm.RegisterProcessor(&TXTProcessor{})
 	dm.RegisterProcessor(&MarkdownProcessor{})
 	dm.RegisterProcessor(&HTMLProcessor{})
-	
-	// Add advanced processors if dependencies are available
+
+	// Register advanced processors
 	dm.RegisterProcessor(&PDFProcessor{})
 	dm.RegisterProcessor(&DOCXProcessor{})
 	dm.RegisterProcessor(&JSONProcessor{})
 	dm.RegisterProcessor(&XMLProcessor{})
+	dm.RegisterProcessor(&CSVProcessor{})
+	dm.RegisterProcessor(&LogProcessor{})
+	dm.RegisterProcessor(&CodeProcessor{})
 
 	return dm
 }
@@ -242,8 +245,8 @@ func (p *PDFProcessor) Read(path string) (*types.DocumentContent, error) {
 	content, err := p.extractPDFContentBasic(path)
 	if err != nil {
 		return &types.DocumentContent{
-			Text:     "PDF content extraction not available - file detected but cannot read content",
-			Type:     "pdf",
+			Text: "PDF content extraction not available - file detected but cannot read content",
+			Type: "pdf",
 			Metadata: map[string]string{
 				"status": "extraction_failed",
 				"error":  err.Error(),
@@ -253,10 +256,10 @@ func (p *PDFProcessor) Read(path string) (*types.DocumentContent, error) {
 	}
 
 	stat, _ := os.Stat(path)
-	
+
 	return &types.DocumentContent{
-		Text:     content,
-		Type:     "pdf",
+		Text: content,
+		Type: "pdf",
 		Metadata: map[string]string{
 			"file_size": fmt.Sprintf("%d", stat.Size()),
 			"status":    "basic_extraction",
@@ -268,3 +271,334 @@ func (p *PDFProcessor) Read(path string) (*types.DocumentContent, error) {
 func (p *PDFProcessor) extractPDFContentBasic(path string) (string, error) {
 	// Basic PDF content extraction placeholder
 	// In real implementation, this would use a PDF library
+	return fmt.Sprintf("PDF file detected: %s\nContent extraction requires PDF processing library.",
+		filepath.Base(path)), nil
+}
+
+func (p *PDFProcessor) GetSupportedTypes() []string {
+	return []string{"pdf"}
+}
+
+// DOCXProcessor handles Word documents with fallback implementation
+type DOCXProcessor struct{}
+
+func (p *DOCXProcessor) Read(path string) (*types.DocumentContent, error) {
+	// Try to extract DOCX content
+	content, err := p.extractDOCXContentBasic(path)
+	if err != nil {
+		return &types.DocumentContent{
+			Text: "DOCX content extraction not available - file detected but cannot read content",
+			Type: "docx",
+			Metadata: map[string]string{
+				"status": "extraction_failed",
+				"error":  err.Error(),
+			},
+			ProcessedAt: time.Now(),
+		}, nil
+	}
+
+	stat, _ := os.Stat(path)
+	wordCount := len(strings.Fields(content))
+
+	return &types.DocumentContent{
+		Text: content,
+		Type: "docx",
+		Metadata: map[string]string{
+			"word_count": fmt.Sprintf("%d", wordCount),
+			"file_size":  fmt.Sprintf("%d", stat.Size()),
+			"status":     "basic_extraction",
+		},
+		ProcessedAt: time.Now(),
+	}, nil
+}
+
+func (p *DOCXProcessor) extractDOCXContentBasic(path string) (string, error) {
+	// Basic DOCX content extraction placeholder
+	// In real implementation, this would use a DOCX library
+	return fmt.Sprintf("DOCX file detected: %s\nContent extraction requires DOCX processing library.",
+		filepath.Base(path)), nil
+}
+
+func (p *DOCXProcessor) GetSupportedTypes() []string {
+	return []string{"docx", "doc"}
+}
+
+// JSONProcessor handles JSON files
+type JSONProcessor struct{}
+
+func (p *JSONProcessor) Read(path string) (*types.DocumentContent, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read JSON file: %w", err)
+	}
+
+	text := string(content)
+
+	// Basic JSON validation
+	var jsonData interface{}
+	if err := json.Unmarshal(content, &jsonData); err != nil {
+		return &types.DocumentContent{
+			Text: text,
+			Type: "json",
+			Metadata: map[string]string{
+				"status":     "invalid_json",
+				"error":      err.Error(),
+				"char_count": fmt.Sprintf("%d", len(text)),
+			},
+			ProcessedAt: time.Now(),
+		}, nil
+	}
+
+	// Count JSON elements
+	lineCount := len(strings.Split(text, "\n"))
+
+	return &types.DocumentContent{
+		Text: text,
+		Type: "json",
+		Metadata: map[string]string{
+			"line_count": fmt.Sprintf("%d", lineCount),
+			"char_count": fmt.Sprintf("%d", len(text)),
+			"status":     "valid_json",
+		},
+		ProcessedAt: time.Now(),
+	}, nil
+}
+
+func (p *JSONProcessor) GetSupportedTypes() []string {
+	return []string{"json"}
+}
+
+// XMLProcessor handles XML files
+type XMLProcessor struct{}
+
+func (p *XMLProcessor) Read(path string) (*types.DocumentContent, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read XML file: %w", err)
+	}
+
+	text := string(content)
+
+	// Basic XML validation
+	decoder := xml.NewDecoder(strings.NewReader(text))
+	elementCount := 0
+	for {
+		_, err := decoder.Token()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return &types.DocumentContent{
+				Text: text,
+				Type: "xml",
+				Metadata: map[string]string{
+					"status":     "invalid_xml",
+					"error":      err.Error(),
+					"char_count": fmt.Sprintf("%d", len(text)),
+				},
+				ProcessedAt: time.Now(),
+			}, nil
+		}
+		elementCount++
+	}
+
+	return &types.DocumentContent{
+		Text: text,
+		Type: "xml",
+		Metadata: map[string]string{
+			"element_count": fmt.Sprintf("%d", elementCount),
+			"char_count":    fmt.Sprintf("%d", len(text)),
+			"status":        "valid_xml",
+		},
+		ProcessedAt: time.Now(),
+	}, nil
+}
+
+func (p *XMLProcessor) GetSupportedTypes() []string {
+	return []string{"xml"}
+}
+
+// FileTypeDetector helps detect file types (basic implementation)
+func DetectFileType(path string) (string, error) {
+	ext := strings.ToLower(filepath.Ext(path))
+	if strings.HasPrefix(ext, ".") {
+		ext = ext[1:]
+	}
+	return ext, nil
+}
+
+// CSVProcessor handles CSV files - ONLY DECLARATION
+type CSVProcessor struct{}
+
+func (p *CSVProcessor) Read(path string) (*types.DocumentContent, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read CSV file: %w", err)
+	}
+
+	text := string(content)
+	lines := strings.Split(text, "\n")
+
+	// Count non-empty lines
+	actualLines := 0
+	for _, line := range lines {
+		if strings.TrimSpace(line) != "" {
+			actualLines++
+		}
+	}
+
+	// Estimate columns from first line
+	columns := 0
+	if len(lines) > 0 && strings.TrimSpace(lines[0]) != "" {
+		columns = len(strings.Split(lines[0], ","))
+	}
+
+	return &types.DocumentContent{
+		Text: text,
+		Type: "csv",
+		Metadata: map[string]string{
+			"lines":          fmt.Sprintf("%d", actualLines),
+			"columns":        fmt.Sprintf("%d", columns),
+			"estimated_rows": fmt.Sprintf("%d", actualLines-1), // minus header
+			"char_count":     fmt.Sprintf("%d", len(text)),
+		},
+		ProcessedAt: time.Now(),
+	}, nil
+}
+
+func (p *CSVProcessor) GetSupportedTypes() []string {
+	return []string{"csv"}
+}
+
+// LogProcessor handles log files - ONLY DECLARATION
+type LogProcessor struct{}
+
+func (p *LogProcessor) Read(path string) (*types.DocumentContent, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read log file: %w", err)
+	}
+
+	text := string(content)
+	lines := strings.Split(text, "\n")
+
+	// Count different log levels
+	errorCount := 0
+	warningCount := 0
+	infoCount := 0
+
+	for _, line := range lines {
+		lower := strings.ToLower(line)
+		if strings.Contains(lower, "error") || strings.Contains(lower, "err") {
+			errorCount++
+		} else if strings.Contains(lower, "warning") || strings.Contains(lower, "warn") {
+			warningCount++
+		} else if strings.Contains(lower, "info") {
+			infoCount++
+		}
+	}
+
+	return &types.DocumentContent{
+		Text: text,
+		Type: "log",
+		Metadata: map[string]string{
+			"total_lines":   fmt.Sprintf("%d", len(lines)),
+			"error_lines":   fmt.Sprintf("%d", errorCount),
+			"warning_lines": fmt.Sprintf("%d", warningCount),
+			"info_lines":    fmt.Sprintf("%d", infoCount),
+			"char_count":    fmt.Sprintf("%d", len(text)),
+		},
+		ProcessedAt: time.Now(),
+	}, nil
+}
+
+func (p *LogProcessor) GetSupportedTypes() []string {
+	return []string{"log", "logs"}
+}
+
+// CodeProcessor handles source code files - ONLY DECLARATION
+type CodeProcessor struct{}
+
+func (p *CodeProcessor) Read(path string) (*types.DocumentContent, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read code file: %w", err)
+	}
+
+	text := string(content)
+	lines := strings.Split(text, "\n")
+
+	// Count code statistics
+	codeLines := 0
+	commentLines := 0
+	emptyLines := 0
+
+	ext := strings.ToLower(filepath.Ext(path))
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			emptyLines++
+		} else if p.isCommentLine(trimmed, ext) {
+			commentLines++
+		} else {
+			codeLines++
+		}
+	}
+
+	return &types.DocumentContent{
+		Text: text,
+		Type: "code",
+		Metadata: map[string]string{
+			"total_lines":   fmt.Sprintf("%d", len(lines)),
+			"code_lines":    fmt.Sprintf("%d", codeLines),
+			"comment_lines": fmt.Sprintf("%d", commentLines),
+			"empty_lines":   fmt.Sprintf("%d", emptyLines),
+			"language":      p.detectLanguage(ext),
+			"char_count":    fmt.Sprintf("%d", len(text)),
+		},
+		ProcessedAt: time.Now(),
+	}, nil
+}
+
+func (p *CodeProcessor) isCommentLine(line, ext string) bool {
+	switch ext {
+	case ".go", ".js", ".java", ".c", ".cpp", ".cs":
+		return strings.HasPrefix(line, "//") || strings.HasPrefix(line, "/*")
+	case ".py", ".sh", ".bash":
+		return strings.HasPrefix(line, "#")
+	case ".html", ".xml":
+		return strings.HasPrefix(line, "<!--")
+	default:
+		return strings.HasPrefix(line, "//") || strings.HasPrefix(line, "#")
+	}
+}
+
+func (p *CodeProcessor) detectLanguage(ext string) string {
+	languages := map[string]string{
+		".go":   "Go",
+		".py":   "Python",
+		".js":   "JavaScript",
+		".java": "Java",
+		".c":    "C",
+		".cpp":  "C++",
+		".cs":   "C#",
+		".php":  "PHP",
+		".rb":   "Ruby",
+		".sh":   "Shell",
+		".bash": "Bash",
+		".sql":  "SQL",
+		".html": "HTML",
+		".css":  "CSS",
+		".xml":  "XML",
+	}
+
+	if lang, exists := languages[ext]; exists {
+		return lang
+	}
+	return "Unknown"
+}
+
+func (p *CodeProcessor) GetSupportedTypes() []string {
+	return []string{"go", "py", "js", "java", "c", "cpp", "cs", "php", "rb", "sh", "bash", "sql", "css"}
+}

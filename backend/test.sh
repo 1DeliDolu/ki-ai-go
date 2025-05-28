@@ -57,6 +57,37 @@ curl -s http://localhost:8082/api/v1/models/tinyllama-1.1b | jq . 2>/dev/null ||
 echo ""
 
 echo ""
+echo "📄 Testing document content extraction..."
+# Create test files first
+mkdir -p test_files
+
+# Create test TXT file
+echo "This is a test text file for document processing." > test_files/test.txt
+
+# Create test JSON file
+echo '{"name": "test", "type": "json", "data": [1,2,3]}' > test_files/test.json
+
+# Create test CSV file
+echo "name,age,city
+John,25,NYC
+Jane,30,LA" > test_files/test.csv
+
+# Upload and test TXT file
+echo "Testing TXT file upload..."
+curl -s -X POST -F "file=@test_files/test.txt" http://localhost:8082/api/v1/documents/upload | jq . 2>/dev/null || curl -s -X POST -F "file=@test_files/test.txt" http://localhost:8082/api/v1/documents/upload
+
+echo ""
+echo "Testing JSON file upload..."
+curl -s -X POST -F "file=@test_files/test.json" http://localhost:8082/api/v1/documents/upload | jq . 2>/dev/null || curl -s -X POST -F "file=@test_files/test.json" http://localhost:8082/api/v1/documents/upload
+
+echo ""
+echo "Testing CSV file upload..."
+curl -s -X POST -F "file=@test_files/test.csv" http://localhost:8082/api/v1/documents/upload | jq . 2>/dev/null || curl -s -X POST -F "file=@test_files/test.csv" http://localhost:8082/api/v1/documents/upload
+
+# Clean up test files
+rm -rf test_files
+
+echo ""
 echo "✅ API tests completed!"
 echo ""
 echo "🌐 You can also test in browser:"
